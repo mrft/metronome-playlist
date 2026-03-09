@@ -310,7 +310,49 @@ html, body {
   tab-size: 2;
 }
 @media (max-width: 680px) {
-  #app { flex-direction: column; }
-  #player-panel { flex: none; min-width: unset; border-right: none; border-bottom: 1px solid var(--border); }
-  #editor-panel.editor-hidden { display: none; }
+  /* Make #app the scroll container so the page itself stays fixed
+     (html/body overflow:hidden is intentional and kept). */
+  #app {
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Each panel occupies the full viewport — user scrolls between them. */
+  #player-panel {
+    flex: none;
+    min-width: unset;
+    height: 100vh;
+    height: 100dvh;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow-y: auto;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  #editor-panel {
+    flex: none;
+    height: 100vh;
+    height: 100dvh;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  /* On mobile the editor panel must always be present in the DOM so the
+     user can scroll to it. The editor-hidden class still tracks state but
+     no longer removes the panel from the layout. */
+  #editor-panel.editor-hidden {
+    flex: none;
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+  }
 }
