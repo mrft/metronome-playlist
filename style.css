@@ -1,0 +1,316 @@
+/* ===== CSS custom properties ===== */
+:root {
+  --bg:         #12122a;
+  --bg2:        #1a1a38;
+  --bg3:        #22224a;
+  --border:     #35356a;
+  --accent:     #4a9eff;
+  --accent-glow:#1e6fd4;
+  --accent2:    #ff5744;
+  --accent2-glow:#cc3520;
+  --beat-color: #ffe44a;
+  --text:       #d8d8f0;
+  --text2:      #8888aa;
+  --success:    #4caf50;
+  --error:      #f44336;
+  --warning:    #ff9800;
+  --bob-idle:   #4a9eff;
+  --bob-beat:   #ffe44a;
+  --bob-accent: #ff5744;
+}
+
+/* ===== Reset / base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+}
+
+/* ===== Top-level layout ===== */
+#app {
+  display: flex;
+  height: 100vh;
+}
+
+/* ===== Player panel (left) ===== */
+#player-panel {
+  flex: 0 0 380px;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+/* ===== Editor panel (right) ===== */
+#editor-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg2);
+  transition: flex-basis 0.25s ease, opacity 0.25s ease;
+  min-width: 0;
+}
+
+#editor-panel.editor-hidden {
+  flex: 0 0 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#monaco-editor-container {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ===== Panel headers ===== */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.panel-header h1 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.editor-header .editor-title {
+  font-size: 0.9rem;
+  color: var(--text2);
+}
+
+.editor-header .editor-title small {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.editor-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ===== Header utility buttons ===== */
+.header-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.15s, color 0.15s;
+}
+.header-btn:hover { background: var(--bg3); color: var(--text); }
+
+/* ===== Song info section ===== */
+#song-info {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  text-align: center;
+}
+
+#song-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#song-meta {
+  font-size: 0.82rem;
+  color: var(--text2);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+#song-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.nav-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 0.85rem;
+}
+.nav-btn:hover:not(:disabled) { background: #30306a; }
+.nav-btn:disabled { opacity: 0.35; cursor: default; }
+
+#song-position {
+  font-size: 0.82rem;
+  color: var(--text2);
+  min-width: 52px;
+  text-align: center;
+}
+
+/* ===== Visual metronome ===== */
+#metronome-visual {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+#pendulum-svg {
+  width: 200px;
+  height: 305px;
+  filter: drop-shadow(0 4px 18px rgba(74, 158, 255, 0.15));
+}
+
+/* ===== Beat lights ===== */
+#beat-lights-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  min-height: 30px;
+}
+
+.beat-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 2px solid var(--border);
+  transition: background 0.06s, border-color 0.06s, box-shadow 0.06s;
+}
+
+.beat-dot.lit-beat {
+  background: var(--beat-color);
+  border-color: var(--beat-color);
+  box-shadow: 0 0 10px var(--beat-color);
+}
+
+.beat-dot.lit-accent {
+  background: var(--accent2);
+  border-color: var(--accent2);
+  box-shadow: 0 0 12px var(--accent2);
+}
+
+/* ===== Transport controls ===== */
+#controls {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 4px 0;
+}
+
+.ctrl-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.ctrl-btn:hover:not(:disabled) { background: #30306a; box-shadow: 0 0 8px rgba(74,158,255,0.2); }
+.ctrl-btn:disabled { opacity: 0.38; cursor: default; }
+.ctrl-btn:active:not(:disabled) { transform: scale(0.97); }
+
+.ctrl-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ctrl-btn.primary:hover { background: var(--accent-glow); border-color: var(--accent-glow); }
+
+.ctrl-sep { width: 1px; height: 30px; background: var(--border); margin: 0 2px; }
+
+/* Sound button states */
+.sound-btn.sound-on  { color: #4cfa80; border-color: #4cfa80; }
+.sound-btn.sound-off { color: var(--text2); }
+
+/* ===== Validation message ===== */
+.validation-msg {
+  font-size: 0.82rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.validation-msg.valid   { color: var(--success); }
+.validation-msg.invalid { color: var(--error); }
+.validation-msg.warning { color: var(--warning); }
+
+/* Schema hint footer inside the editor panel */
+#schema-hint {
+  padding: 8px 14px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--text2);
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+
+#schema-hint strong { color: var(--accent); }
+#schema-hint kbd {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 0.75rem;
+  font-family: inherit;
+}
+
+/* Fallback textarea editor (shown when Monaco CDN is unavailable) */
+.fallback-editor {
+  width: 100%;
+  height: 100%;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border: none;
+  outline: none;
+  padding: 14px;
+  font-family: 'Consolas', 'Courier New', 'Lucida Console', monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  resize: none;
+  tab-size: 2;
+}
+@media (max-width: 680px) {
+  #app { flex-direction: column; }
+  #player-panel { flex: none; min-width: unset; border-right: none; border-bottom: 1px solid var(--border); }
+  #editor-panel.editor-hidden { display: none; }
+}
