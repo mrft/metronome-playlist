@@ -581,6 +581,10 @@ function initMonaco() {
     require(['vs/editor/editor.main'], function () {
       clearTimeout(monacoLoadTimeout);
 
+      // Bail out if the fallback editor was already activated while we waited
+      // (e.g., CDN timed-out then finally resolved late).
+      if (usingFallbackEditor) return;
+
       const SCHEMA_URI = 'https://metronome-playlist/playlist-schema.json';
       const MODEL_URI  = monaco.Uri.parse('https://metronome-playlist/playlist.json');
 

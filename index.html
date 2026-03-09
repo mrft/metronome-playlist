@@ -42,7 +42,15 @@
           <line x1="90" y1="218" x2="110" y2="218" stroke="#35356a" stroke-width="1.2"/>
           <line x1="88" y1="233" x2="112" y2="233" stroke="#35356a" stroke-width="1.2"/>
 
-          <!-- Pendulum group — rotates around the pivot at (100, 197) -->
+          <!-- Body outline -->
+          <polygon points="58,295 142,295 124,148 76,148" fill="none" stroke="#3a3a72" stroke-width="1.5"/>
+
+          <!-- Beat count display inside body -->
+          <text id="beat-text" x="100" y="252" text-anchor="middle"
+                fill="#7070a0" font-size="20" font-family="monospace" font-weight="bold">—</text>
+
+          <!-- Pendulum group — rotates around the pivot at (100, 197).
+               Drawn LAST so it always renders on top of the body. -->
           <g id="pendulum">
             <!-- Rod (runs from top tail through pivot to bob) -->
             <line x1="100" y1="60" x2="100" y2="287" stroke="#c0c0de" stroke-width="2.2" stroke-linecap="round"/>
@@ -52,19 +60,9 @@
             <circle id="pendulum-bob" cx="100" cy="283" r="11" fill="#4a9eff"/>
           </g>
 
-          <!-- Semi-transparent overlay hides lower part of the rod inside the body -->
-          <polygon points="60,293 140,293 122,150 78,150" fill="#22224a" opacity="0.65"/>
-
-          <!-- Body outline -->
-          <polygon points="58,295 142,295 124,148 76,148" fill="none" stroke="#3a3a72" stroke-width="1.5"/>
-
-          <!-- Pivot pin -->
+          <!-- Pivot pin — drawn after pendulum so it sits on top of the rod -->
           <circle cx="100" cy="197" r="5" fill="#666"/>
           <circle cx="100" cy="197" r="2.5" fill="#ccc"/>
-
-          <!-- Beat count display inside body -->
-          <text id="beat-text" x="100" y="252" text-anchor="middle"
-                fill="#7070a0" font-size="20" font-family="monospace" font-weight="bold">—</text>
         </svg>
 
         <!-- Row of beat indicator dots -->
