@@ -392,7 +392,7 @@ function resumeMetronome() {
 
   ensureAudioContext();
 
-  // Restart from beat 0 (simple resume)
+  // Restart from beat 0
   currentBeat  = 0;
   currentSubdiv = 0;
   beatDurSeconds = 60 / song.tempo;
@@ -498,7 +498,7 @@ function updateUI() {
 
   elPlayBtn.disabled = !hasPlaylist;
   const playBtnConfig = isPlaying  ? { text: '⏸ Pause',   label: 'Pause'   }
-                      : isPaused   ? { text: '▶ Resume',  label: 'Resume'  }
+                      : isPaused   ? { text: '▶ Restart', label: 'Restart' }
                                    : { text: '▶ Play',    label: 'Play'    };
   elPlayBtn.textContent = playBtnConfig.text;
   elPlayBtn.title = playBtnConfig.label;
@@ -793,10 +793,15 @@ function init() {
 
   // Transport controls
   elPlayBtn.addEventListener('click', () => {
-    ensureAudioContext();
-    if (isPlaying)    pauseMetronome();
-    else if (isPaused) resumeMetronome();
-    else              startMetronome();
+    if (isPlaying) {
+      pauseMetronome();
+    } else if (isPaused) {
+      ensureAudioContext();
+      resumeMetronome();
+    } else {
+      ensureAudioContext();
+      startMetronome();
+    }
   });
   elStopBtn.addEventListener('click',  stopMetronome);
 
