@@ -577,11 +577,18 @@ function renderPlaylistList() {
 
 /** Helper: create a styled input for a playlist row. */
 function makeInput(type, value, cssClass, enabled, min, max) {
+  const labelMap = {
+    'playlist-name':   'Song name',
+    'playlist-tempo':  'Tempo (BPM)',
+    'playlist-beats':  'Beats per bar',
+    'playlist-subdiv': 'Subdivision',
+  };
   const inp = document.createElement('input');
   inp.type      = type;
   inp.value     = value;
   inp.className = `playlist-input ${cssClass}`;
   inp.disabled  = !enabled;
+  inp.setAttribute('aria-label', labelMap[cssClass] || cssClass);
   if (min !== undefined) inp.min = min;
   if (max !== undefined) inp.max = max;
   return inp;
@@ -590,8 +597,10 @@ function makeInput(type, value, cssClass, enabled, min, max) {
 /** Helper: create a small action button for a playlist row. */
 function makeActionBtn(text, title, action, disabled, handler) {
   const btn = document.createElement('button');
+  btn.type             = 'button';
   btn.textContent      = text;
   btn.title            = title;
+  btn.setAttribute('aria-label', title);
   btn.dataset.action   = action;
   btn.className        = 'playlist-action-btn';
   btn.disabled         = disabled;
@@ -641,12 +650,19 @@ function commitInlineEdit(i) {
   const row = elPlaylistList && elPlaylistList.querySelector(`.playlist-row[data-index="${i}"]`);
   if (!row) return;
 
-  const nameVal   = row.querySelector('.playlist-name').value.trim();
+  const nameInput = row.querySelector('.playlist-name');
+  const nameVal   = nameInput ? nameInput.value.trim() : '';
   const tempoVal  = Math.min(400, Math.max(20, parseFloat(row.querySelector('.playlist-tempo').value)  || DEFAULT_NEW_SONG_TEMPO));
   const beatsVal  = Math.min(32,  Math.max(1,  parseInt(row.querySelector('.playlist-beats').value, 10) || DEFAULT_NEW_SONG_BEATS));
   const subdivVal = Math.min(8,   Math.max(1,  parseInt(row.querySelector('.playlist-subdiv').value, 10) || DEFAULT_NEW_SONG_SUBDIVISION));
 
-  if (!nameVal) return; // don't save an empty name
+  if (!nameVal) {
+    // Don't save an empty name; restore the previous value so the UI matches playlist state
+    if (nameInput) {
+      nameInput.value = (playlist[i] && playlist[i].name) ? String(playlist[i].name) : 'Untitled';
+    }
+    return;
+  }
 
   // Clamp inputs back to valid range in case user typed out-of-bounds values
   row.querySelector('.playlist-tempo').value  = tempoVal;
@@ -671,11 +687,14 @@ function syncPlaylistToEditor() {
   if (usingFallbackEditor) {
     const ta = document.getElementById('fallback-editor');
     if (ta) ta.value = json;
+    // Fallback textarea does not have Monaco's onDidChangeContent handler,
+    // so trigger validation explicitly here.
+    refreshValidationStatus();
   } else if (monacoEditor) {
     const model = monacoEditor.getModel();
+    // model.setValue() fires onDidChangeContent → refreshValidationStatus automatically
     if (model) model.setValue(json);
   }
-  refreshValidationStatus();
 }
 
 /** Move the song at index i by delta (-1 = up, +1 = down). */
@@ -1016,10 +1035,8 @@ function init() {
     if (isPlaying) {
       pauseMetronome();
     } else if (isPaused) {
-      ensureAudioContext();
       resumeMetronome();
     } else {
-      ensureAudioContext();
       startMetronome();
     }
   });
