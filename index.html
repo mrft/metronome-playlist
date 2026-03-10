@@ -18,12 +18,25 @@
 
       <!-- Current song info + prev/next -->
       <section id="song-info">
-        <div id="song-name">No playlist loaded</div>
-        <div id="song-meta"></div>
+        <div id="song-name-row">
+          <span id="song-order" class="song-order"></span>
+          <span id="song-name" class="view-only">No playlist loaded</span>
+          <input id="edit-name" class="edit-field edit-only" type="text" aria-label="Song name" />
+        </div>
+        <!-- Static meta (view mode) -->
+        <div id="song-meta" class="view-only"></div>
+        <!-- Editable meta fields (edit mode only) -->
+        <div id="song-edit-meta" class="edit-only">
+          <label class="edit-label">BPM<input id="edit-tempo" class="edit-field" type="number" min="20" max="400" step="1" aria-label="Tempo (BPM)" /></label>
+          <label class="edit-label">Beats<input id="edit-beats" class="edit-field" type="number" min="1" max="32" step="1" aria-label="Beats per bar" /></label>
+          <label class="edit-label">Subdiv<input id="edit-subdivision" class="edit-field" type="number" min="1" max="8" step="1" aria-label="Subdivision" /></label>
+        </div>
         <div id="song-nav">
+          <button id="move-up-btn" class="nav-btn edit-only" title="Move song up in playlist" aria-label="Move song up">↑</button>
           <button id="prev-song-btn" class="nav-btn" title="Previous song" aria-label="Previous song">&#9664;</button>
           <span id="song-position"></span>
           <button id="next-song-btn" class="nav-btn" title="Next song" aria-label="Next song">&#9654;</button>
+          <button id="move-down-btn" class="nav-btn edit-only" title="Move song down in playlist" aria-label="Move song down">↓</button>
         </div>
       </section>
 
