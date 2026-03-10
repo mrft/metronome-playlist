@@ -724,7 +724,10 @@ function setEditorVisible(visible) {
   // Scroll the viewport to whichever panel is now active.
   if (window.matchMedia('(max-width: 680px)').matches) {
     const target = visible ? elEditorPanel : document.getElementById('player-panel');
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const prefersReducedMotion =
+      window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const scrollBehavior = prefersReducedMotion ? 'auto' : 'smooth';
+    target.scrollIntoView({ behavior: scrollBehavior, block: 'start' });
   }
 
   // Give the CSS transition time to complete before asking Monaco to re-layout
