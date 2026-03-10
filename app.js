@@ -32,6 +32,12 @@ const MAX_ANGLE = 28;
 /** Flash duration for beat lights / bob (ms). */
 const FLASH_MS = 140;
 
+/**
+ * How many consumed entries to accumulate in visualQueue before trimming them.
+ * Keeps memory bounded while avoiding per-frame allocations (shift() is O(n)).
+ */
+const VISUAL_QUEUE_TRIM_THRESHOLD = 32;
+
 const DEFAULT_PLAYLIST = [
   { name: 'Slow Blues',   tempo: 60,  beats: 4, subdivision: 1 },
   { name: 'Rock Steady',  tempo: 120, beats: 4, subdivision: 2 },
@@ -112,11 +118,12 @@ let beatDurSeconds = 0;      // duration of one main beat (seconds)
 
 /** @type {Array<{audioTime:number, beat:number, isSubdiv:boolean}>} */
 let visualQueue = [];
+let visualQueueHead = 0;
 
 let animationFrameId = null;
 
 // DOM element references (populated in init())
-let elPlayBtn, elPauseBtn, elStopBtn, elSoundBtn;
+let elPlayBtn, elStopBtn, elSoundBtn;
 let elPrevSong, elNextSong, elSongName, elSongMeta, elSongPos;
 let elPendulum, elPendulumBob, elWeightRect, elBeatText;
 let elBeatLightsRow;
@@ -240,8 +247,9 @@ function animationLoop() {
 
   // ── Process visual queue ───────────────────────────────────────────────
   // A small tolerance (one animation frame ≈ 16 ms) so we don't miss flashes
-  while (visualQueue.length > 0 && visualQueue[0].audioTime <= now + 0.018) {
-    const evt = visualQueue.shift();
+  while (visualQueueHead < visualQueue.length &&
+         visualQueue[visualQueueHead].audioTime <= now + 0.018) {
+    const evt = visualQueue[visualQueueHead++];
     if (!evt.isSubdiv) {
       triggerBeatFlash(evt.beat, evt.beat === 0);
     }
@@ -249,6 +257,11 @@ function animationLoop() {
     if (evt.isSubdiv) {
       pulseBob(false, true);
     }
+  }
+  // Trim the consumed prefix periodically to prevent unbounded memory growth
+  if (visualQueueHead >= VISUAL_QUEUE_TRIM_THRESHOLD) {
+    visualQueue.splice(0, visualQueueHead);
+    visualQueueHead = 0;
   }
 
   animationFrameId = requestAnimationFrame(animationLoop);
@@ -349,6 +362,7 @@ function startMetronome() {
   nextBeatTime   = audioCtx.currentTime + 0.05;
   playStartAudioTime = nextBeatTime;
   visualQueue    = [];
+  visualQueueHead = 0;
 
   schedulerTimer = setInterval(scheduleBeats, SCHEDULE_INTERVAL_MS);
   animationFrameId = requestAnimationFrame(animationLoop);
@@ -385,6 +399,7 @@ function resumeMetronome() {
   nextBeatTime   = audioCtx.currentTime + 0.05;
   playStartAudioTime = nextBeatTime;
   visualQueue    = [];
+  visualQueueHead = 0;
 
   schedulerTimer = setInterval(scheduleBeats, SCHEDULE_INTERVAL_MS);
   animationFrameId = requestAnimationFrame(animationLoop);
@@ -403,6 +418,7 @@ function stopMetronome() {
   isPlaying = false;
   isPaused  = false;
   visualQueue = [];
+  visualQueueHead = 0;
 
   resetVisuals();
   updateUI();
@@ -480,8 +496,13 @@ function updateSongDisplay() {
 function updateUI() {
   const hasPlaylist = playlist.length > 0;
 
-  elPlayBtn.disabled  = isPlaying || !hasPlaylist;
-  elPauseBtn.disabled = !isPlaying;
+  elPlayBtn.disabled = !hasPlaylist;
+  const playBtnConfig = isPlaying  ? { text: '⏸ Pause',   label: 'Pause'   }
+                      : isPaused   ? { text: '▶ Resume',  label: 'Resume'  }
+                                   : { text: '▶ Play',    label: 'Play'    };
+  elPlayBtn.textContent = playBtnConfig.text;
+  elPlayBtn.title = playBtnConfig.label;
+  elPlayBtn.setAttribute('aria-label', playBtnConfig.label);
   elStopBtn.disabled  = !isPlaying && !isPaused;
 
   elPrevSong.disabled = currentSongIndex <= 0;
@@ -492,11 +513,15 @@ function updateUI() {
     elSoundBtn.classList.add('sound-on');
     elSoundBtn.classList.remove('sound-off');
     elSoundBtn.title = 'Sound on — click to mute';
+    elSoundBtn.setAttribute('aria-label', 'Sound on — click to mute');
+    elSoundBtn.setAttribute('aria-pressed', 'true');
   } else {
     elSoundBtn.textContent = '🔇';
     elSoundBtn.classList.add('sound-off');
     elSoundBtn.classList.remove('sound-on');
     elSoundBtn.title = 'Sound off — click to unmute';
+    elSoundBtn.setAttribute('aria-label', 'Sound off — click to unmute');
+    elSoundBtn.setAttribute('aria-pressed', 'false');
   }
 }
 
@@ -716,8 +741,10 @@ function applyPlaylist() {
 function setEditorVisible(visible) {
   if (visible) {
     elEditorPanel.classList.remove('editor-hidden');
+    elToggleEditorBtn.setAttribute('aria-pressed', 'true');
   } else {
     elEditorPanel.classList.add('editor-hidden');
+    elToggleEditorBtn.setAttribute('aria-pressed', 'false');
   }
 
   // On mobile the editor panel is always in the DOM (overflow-scroll layout).
@@ -743,7 +770,6 @@ function setEditorVisible(visible) {
 function init() {
   // Resolve DOM references
   elPlayBtn   = document.getElementById('play-btn');
-  elPauseBtn  = document.getElementById('pause-btn');
   elStopBtn   = document.getElementById('stop-btn');
   elSoundBtn  = document.getElementById('sound-btn');
 
@@ -768,10 +794,10 @@ function init() {
   // Transport controls
   elPlayBtn.addEventListener('click', () => {
     ensureAudioContext();
-    if (isPaused) resumeMetronome();
-    else          startMetronome();
+    if (isPlaying)    pauseMetronome();
+    else if (isPaused) resumeMetronome();
+    else              startMetronome();
   });
-  elPauseBtn.addEventListener('click', pauseMetronome);
   elStopBtn.addEventListener('click',  stopMetronome);
 
   elSoundBtn.addEventListener('click', () => {

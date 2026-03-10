@@ -13,7 +13,7 @@
     <div id="player-panel">
       <header class="panel-header">
         <h1>🎵 Metronome Playlist</h1>
-        <button id="toggle-editor-btn" class="header-btn" title="Toggle editor">✏️ Editor</button>
+        <button id="toggle-editor-btn" class="header-btn" title="Toggle editor" aria-pressed="true" aria-label="Toggle editor">✏️ Editor</button>
       </header>
 
       <!-- Current song info + prev/next -->
@@ -21,9 +21,9 @@
         <div id="song-name">No playlist loaded</div>
         <div id="song-meta"></div>
         <div id="song-nav">
-          <button id="prev-song-btn" class="nav-btn" title="Previous song">&#9664;</button>
+          <button id="prev-song-btn" class="nav-btn" title="Previous song" aria-label="Previous song">&#9664;</button>
           <span id="song-position"></span>
-          <button id="next-song-btn" class="nav-btn" title="Next song">&#9654;</button>
+          <button id="next-song-btn" class="nav-btn" title="Next song" aria-label="Next song">&#9654;</button>
         </div>
       </section>
 
@@ -71,11 +71,10 @@
 
       <!-- Transport controls -->
       <section id="controls">
-        <button id="play-btn"  class="ctrl-btn play-btn"  title="Play">&#9654; Play</button>
-        <button id="pause-btn" class="ctrl-btn pause-btn" title="Pause" disabled>⏸ Pause</button>
+        <button id="play-btn"  class="ctrl-btn play-btn"  title="Play" aria-label="Play">&#9654; Play</button>
         <button id="stop-btn"  class="ctrl-btn stop-btn"  title="Stop"  disabled>&#9632; Stop</button>
         <span class="ctrl-sep"></span>
-        <button id="sound-btn" class="ctrl-btn sound-btn sound-on" title="Toggle sound">🔊</button>
+        <button id="sound-btn" class="ctrl-btn sound-btn sound-on" title="Sound on — click to mute" aria-label="Sound on — click to mute" aria-pressed="true">🔊</button>
       </section>
     </div><!-- /player-panel -->
 
