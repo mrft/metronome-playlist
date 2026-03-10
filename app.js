@@ -1007,6 +1007,9 @@ function onEditFieldInput() {
  * Like applyPlaylist() but called on editor blur: applies valid JSON while
  * preserving the current song index (clamped to the new playlist length).
  * Does not show the "✓ Applied!" button feedback.
+ * No-ops when the serialised content is identical to the current playlist
+ * (avoids audible interruptions when the user clicks away without changing
+ * anything).  Also validates required per-song fields before applying.
  */
 function applyPlaylistOnEditorBlur() {
   const value = getEditorValue();
@@ -1019,11 +1022,34 @@ function applyPlaylistOnEditorBlur() {
   }
   if (!Array.isArray(parsed) || parsed.length === 0) return;
 
+  // Validate required per-song fields/ranges (same rules as onEditFieldBlur)
+  for (const s of parsed) {
+    const name        = typeof s.name === 'string' ? s.name.trim() : '';
+    const tempo       = parseFloat(s.tempo);
+    const beats       = parseInt(s.beats, 10);
+    const subdivision = parseInt(s.subdivision ?? 1, 10);
+    if (
+      !name ||
+      isNaN(tempo) || tempo < 20 || tempo > 400 ||
+      isNaN(beats) || beats < 1  || beats > 32  ||
+      isNaN(subdivision) || subdivision < 1 || subdivision > 8
+    ) {
+      return; // silently ignore; user will see the problem on explicit Apply
+    }
+  }
+
+  // Skip stop/restart if the playlist content has not actually changed.
+  // Normalise both sides identically (subdivision default first) so key
+  // ordering differences don't produce false negatives.
+  const normalized        = parsed.map(s => ({ subdivision: 1, ...s }));
+  const normalizedCurrent = playlist.map(s => ({ subdivision: 1, ...s }));
+  if (JSON.stringify(normalized) === JSON.stringify(normalizedCurrent)) return;
+
   const wasPlaying   = isPlaying;
   const savedIndex   = currentSongIndex;
   if (isPlaying || isPaused) stopMetronome();
 
-  playlist          = parsed.map(s => ({ subdivision: 1, ...s }));
+  playlist          = normalized;
   currentSongIndex  = Math.min(savedIndex, playlist.length - 1);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
 
