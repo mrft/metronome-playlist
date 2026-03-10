@@ -282,6 +282,100 @@ html, body {
 .validation-msg.invalid { color: var(--error); }
 .validation-msg.warning { color: var(--warning); }
 
+/* ===== Inline playlist list (inside editor panel) ===== */
+#playlist-list-section {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+}
+
+.playlist-list-header {
+  display: grid;
+  grid-template-columns: 1fr 66px 58px 46px 88px;
+  gap: 4px;
+  padding: 5px 10px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text2);
+  font-weight: 600;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+#playlist-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.playlist-row {
+  display: grid;
+  grid-template-columns: 1fr 66px 58px 46px 88px;
+  gap: 4px;
+  padding: 2px 10px;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.playlist-row:hover { background: var(--bg3); }
+.playlist-row.active-song { background: rgba(74, 158, 255, 0.1); }
+
+.playlist-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.82rem;
+  padding: 3px 5px;
+  width: 100%;
+  transition: border-color 0.15s, background 0.15s;
+}
+.playlist-input:not(:disabled):hover,
+.playlist-input:not(:disabled):focus {
+  border-color: var(--border);
+  background: var(--bg3);
+  outline: none;
+}
+.playlist-input:disabled { cursor: default; color: var(--text2); }
+.playlist-input[type="number"] { text-align: right; }
+
+.playlist-row-actions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+}
+
+.playlist-action-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  line-height: 1;
+}
+.playlist-action-btn:hover:not(:disabled) { background: var(--bg3); color: var(--text); }
+.playlist-action-btn:disabled { opacity: 0.3; cursor: default; }
+
+.playlist-add-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+.playlist-add-btn:hover:not(:disabled) { background: var(--bg3); color: var(--text); }
+.playlist-add-btn:disabled { opacity: 0.3; cursor: default; }
+
 /* Schema hint footer inside the editor panel */
 #schema-hint {
   padding: 8px 14px;

@@ -38,6 +38,11 @@ const FLASH_MS = 140;
  */
 const VISUAL_QUEUE_TRIM_THRESHOLD = 32;
 
+/** Default field values used when adding a new song via the inline editor. */
+const DEFAULT_NEW_SONG_TEMPO      = 120;
+const DEFAULT_NEW_SONG_BEATS      = 4;
+const DEFAULT_NEW_SONG_SUBDIVISION = 1;
+
 const DEFAULT_PLAYLIST = [
   { name: 'Slow Blues',   tempo: 60,  beats: 4, subdivision: 1 },
   { name: 'Rock Steady',  tempo: 120, beats: 4, subdivision: 2 },
@@ -128,6 +133,7 @@ let elPrevSong, elNextSong, elSongName, elSongMeta, elSongPos;
 let elPendulum, elPendulumBob, elWeightRect, elBeatText;
 let elBeatLightsRow;
 let elValidationMsg, elApplyBtn, elToggleEditorBtn, elCloseEditorBtn, elEditorPanel;
+let elPlaylistList, elAddSongBtn;
 
 /** References to beat-light dot elements for the current song. */
 let beatDots = [];
@@ -443,6 +449,7 @@ function loadPlaylist(songs) {
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(songs));
 
+  renderPlaylistList();
   updateSongDisplay();
   updateUI();
 
@@ -523,6 +530,217 @@ function updateUI() {
     elSoundBtn.setAttribute('aria-label', 'Sound off — click to unmute');
     elSoundBtn.setAttribute('aria-pressed', 'false');
   }
+
+  updatePlaylistListEditState();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Inline playlist editor
+───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * (Re)build the full inline playlist list DOM.
+ * Call when the playlist structure changes (load, add, remove, reorder).
+ */
+function renderPlaylistList() {
+  if (!elPlaylistList) return;
+  elPlaylistList.innerHTML = '';
+  const isEditable = !isPlaying && !isPaused;
+
+  playlist.forEach((song, i) => {
+    const row = document.createElement('div');
+    row.className = 'playlist-row' + (i === currentSongIndex ? ' active-song' : '');
+    row.dataset.index = i;
+
+    const nameInput   = makeInput('text',   song.name,               'playlist-name',   isEditable);
+    const tempoInput  = makeInput('number', song.tempo,              'playlist-tempo',  isEditable, 20,  400);
+    const beatsInput  = makeInput('number', song.beats,              'playlist-beats',  isEditable, 1,   32);
+    const subdivInput = makeInput('number', song.subdivision || 1,   'playlist-subdiv', isEditable, 1,   8);
+
+    [nameInput, tempoInput, beatsInput, subdivInput].forEach(inp => {
+      inp.addEventListener('blur',  () => commitInlineEdit(i));
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); });
+    });
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'playlist-row-actions';
+    actionsDiv.appendChild(makeActionBtn('▲', 'Move up',     'move-up',     !isEditable || i === 0,                  () => moveSong(i, -1)));
+    actionsDiv.appendChild(makeActionBtn('▼', 'Move down',   'move-down',   !isEditable || i === playlist.length - 1, () => moveSong(i, 1)));
+    actionsDiv.appendChild(makeActionBtn('✕', 'Remove song', 'remove-song', !isEditable || playlist.length <= 1,      () => removeSong(i)));
+
+    row.append(nameInput, tempoInput, beatsInput, subdivInput, actionsDiv);
+    elPlaylistList.appendChild(row);
+  });
+
+  if (elAddSongBtn) elAddSongBtn.disabled = !isEditable;
+}
+
+/** Helper: create a styled input for a playlist row. */
+function makeInput(type, value, cssClass, enabled, min, max) {
+  const inp = document.createElement('input');
+  inp.type      = type;
+  inp.value     = value;
+  inp.className = `playlist-input ${cssClass}`;
+  inp.disabled  = !enabled;
+  if (min !== undefined) inp.min = min;
+  if (max !== undefined) inp.max = max;
+  return inp;
+}
+
+/** Helper: create a small action button for a playlist row. */
+function makeActionBtn(text, title, action, disabled, handler) {
+  const btn = document.createElement('button');
+  btn.textContent      = text;
+  btn.title            = title;
+  btn.dataset.action   = action;
+  btn.className        = 'playlist-action-btn';
+  btn.disabled         = disabled;
+  btn.addEventListener('click', handler);
+  return btn;
+}
+
+/**
+ * Update only the editable/disabled state + active-song class of existing rows.
+ * Called from updateUI() so we never lose focus while the user is typing.
+ */
+function updatePlaylistListEditState() {
+  if (!elPlaylistList) return;
+  const isEditable = !isPlaying && !isPaused;
+
+  elPlaylistList.querySelectorAll('.playlist-row').forEach(row => {
+    const idx = parseInt(row.dataset.index, 10);
+    row.classList.toggle('active-song', idx === currentSongIndex);
+
+    row.querySelectorAll('.playlist-input').forEach(inp => {
+      inp.disabled = !isEditable;
+    });
+
+    row.querySelectorAll('.playlist-action-btn').forEach(btn => {
+      if (!isEditable) {
+        btn.disabled = true;
+      } else if (btn.dataset.action === 'move-up') {
+        btn.disabled = idx === 0;
+      } else if (btn.dataset.action === 'move-down') {
+        btn.disabled = idx >= playlist.length - 1;
+      } else if (btn.dataset.action === 'remove-song') {
+        btn.disabled = playlist.length <= 1;
+      }
+    });
+  });
+
+  if (elAddSongBtn) elAddSongBtn.disabled = !isEditable;
+}
+
+/**
+ * Read a row's inputs, clamp values, and persist the change to playlist[i].
+ * Called on blur of any inline input.
+ * @param {number} i  Row index
+ */
+function commitInlineEdit(i) {
+  if (isPlaying || isPaused) return;
+  const row = elPlaylistList && elPlaylistList.querySelector(`.playlist-row[data-index="${i}"]`);
+  if (!row) return;
+
+  const nameVal   = row.querySelector('.playlist-name').value.trim();
+  const tempoVal  = Math.min(400, Math.max(20, parseFloat(row.querySelector('.playlist-tempo').value)  || DEFAULT_NEW_SONG_TEMPO));
+  const beatsVal  = Math.min(32,  Math.max(1,  parseInt(row.querySelector('.playlist-beats').value, 10) || DEFAULT_NEW_SONG_BEATS));
+  const subdivVal = Math.min(8,   Math.max(1,  parseInt(row.querySelector('.playlist-subdiv').value, 10) || DEFAULT_NEW_SONG_SUBDIVISION));
+
+  if (!nameVal) return; // don't save an empty name
+
+  // Clamp inputs back to valid range in case user typed out-of-bounds values
+  row.querySelector('.playlist-tempo').value  = tempoVal;
+  row.querySelector('.playlist-beats').value  = beatsVal;
+  row.querySelector('.playlist-subdiv').value = subdivVal;
+
+  playlist[i] = { name: nameVal, tempo: tempoVal, beats: beatsVal, subdivision: subdivVal };
+
+  syncPlaylistToEditor();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+
+  if (i === currentSongIndex) {
+    updateSongDisplay();
+    renderBeatDots(beatsVal);
+    positionWeightForTempo(tempoVal);
+  }
+}
+
+/** Serialize playlist → JSON editor (Monaco or textarea) and refresh validation. */
+function syncPlaylistToEditor() {
+  const json = JSON.stringify(playlist, null, 2);
+  if (usingFallbackEditor) {
+    const ta = document.getElementById('fallback-editor');
+    if (ta) ta.value = json;
+  } else if (monacoEditor) {
+    const model = monacoEditor.getModel();
+    if (model) model.setValue(json);
+  }
+  refreshValidationStatus();
+}
+
+/** Move the song at index i by delta (-1 = up, +1 = down). */
+function moveSong(i, delta) {
+  if (isPlaying || isPaused) return;
+  const j = i + delta;
+  if (j < 0 || j >= playlist.length) return;
+
+  [playlist[i], playlist[j]] = [playlist[j], playlist[i]];
+  if (currentSongIndex === i)      currentSongIndex = j;
+  else if (currentSongIndex === j) currentSongIndex = i;
+
+  renderPlaylistList();
+  syncPlaylistToEditor();
+  updateSongDisplay();
+  updateUI();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+}
+
+/** Remove the song at index i from the playlist. */
+function removeSong(i) {
+  if (isPlaying || isPaused) return;
+  if (playlist.length <= 1) return;
+
+  playlist.splice(i, 1);
+  if (currentSongIndex >= playlist.length) currentSongIndex = playlist.length - 1;
+
+  renderPlaylistList();
+  syncPlaylistToEditor();
+  updateSongDisplay();
+  updateUI();
+  const song = playlist[currentSongIndex];
+  if (song) {
+    renderBeatDots(song.beats);
+    positionWeightForTempo(song.tempo);
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+}
+
+/** Append a new default song and focus its name input. */
+function addSong() {
+  if (isPlaying || isPaused) return;
+  playlist.push({
+    name:        'New Song',
+    tempo:       DEFAULT_NEW_SONG_TEMPO,
+    beats:       DEFAULT_NEW_SONG_BEATS,
+    subdivision: DEFAULT_NEW_SONG_SUBDIVISION,
+  });
+
+  renderPlaylistList();
+  syncPlaylistToEditor();
+  updateSongDisplay();
+  updateUI();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+
+  // Focus the new row's name input — renderPlaylistList() is synchronous so
+  // the DOM is already updated; a single rAF waits for the next paint.
+  requestAnimationFrame(() => {
+    const rows = elPlaylistList ? elPlaylistList.querySelectorAll('.playlist-row') : [];
+    const lastRow = rows[rows.length - 1];
+    if (lastRow) {
+      const inp = lastRow.querySelector('.playlist-name');
+      if (inp) { inp.select(); inp.focus(); }
+    }
+  });
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -790,6 +1008,8 @@ function init() {
   elToggleEditorBtn = document.getElementById('toggle-editor-btn');
   elCloseEditorBtn  = document.getElementById('close-editor-btn');
   elEditorPanel     = document.getElementById('editor-panel');
+  elPlaylistList    = document.getElementById('playlist-list');
+  elAddSongBtn      = document.getElementById('add-song-btn');
 
   // Transport controls
   elPlayBtn.addEventListener('click', () => {
@@ -823,6 +1043,9 @@ function init() {
 
   // Apply button
   elApplyBtn.addEventListener('click', applyPlaylist);
+
+  // Inline playlist list — add song
+  elAddSongBtn.addEventListener('click', addSong);
 
   // Set initial UI state
   updateUI();

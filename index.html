@@ -88,6 +88,20 @@
           <button id="close-editor-btn" class="header-btn" title="Close editor">✕</button>
         </div>
       </header>
+      <!-- Inline playlist editor — visible whenever the editor panel is open -->
+      <div id="playlist-list-section">
+        <div class="playlist-list-header">
+          <span class="plcol-name">Name</span>
+          <span class="plcol-tempo">BPM</span>
+          <span class="plcol-beats">Beats</span>
+          <span class="plcol-subdiv">Sub</span>
+          <span class="plcol-actions">
+            <button id="add-song-btn" class="playlist-add-btn" title="Add song">＋ Add</button>
+          </span>
+        </div>
+        <div id="playlist-list"></div>
+      </div>
+
       <div id="monaco-editor-container"></div>
       <!-- Textarea fallback shown if Monaco CDN is unavailable -->
       <textarea id="fallback-editor" class="fallback-editor" style="display:none"
