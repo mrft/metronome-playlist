@@ -101,6 +101,8 @@ let currentSongIndex = 0;
 
 let isPlaying = false;
 let isPaused  = false;
+/** True when the metronome was auto-paused because the page became hidden. */
+let pausedByVisibility = false;
 let soundEnabled = true;
 
 // Metronome engine state
@@ -423,8 +425,15 @@ function pauseMetronome() {
   cancelAnimationFrame(animationFrameId);
   animationFrameId = null;
 
+  // Suspend the AudioContext so it stops consuming CPU while paused.
+  if (audioCtx && audioCtx.state === 'running') {
+    audioCtx.suspend();
+  }
+
   isPaused  = true;
   isPlaying = false;
+  // A user-initiated pause should not trigger an auto-resume on visibility restore.
+  pausedByVisibility = false;
   updateUI();
 }
 
@@ -460,6 +469,7 @@ function stopMetronome() {
 
   isPlaying = false;
   isPaused  = false;
+  pausedByVisibility = false;
   visualQueue = [];
   visualQueueHead = 0;
 
@@ -1191,11 +1201,27 @@ function init() {
   // Apply button
   elApplyBtn.addEventListener('click', applyPlaylist);
 
-  // Re-acquire the wake lock when the tab becomes visible again after being
-  // hidden (the browser automatically releases wake locks on visibility loss).
+  // Page Visibility API: auto-pause when the tab is hidden, auto-resume when
+  // it becomes visible again (only if we were the ones who paused it).
+  // Also re-acquire the wake lock on visibility restore, because the browser
+  // automatically releases wake locks when the page is hidden.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && (isPlaying || isPaused)) {
-      acquireWakeLock();
+    if (document.visibilityState === 'hidden') {
+      if (isPlaying) {
+        pauseMetronome();
+        // Mark as auto-paused *after* pauseMetronome() so the flag is not
+        // cleared by the "user-initiated pause" reset inside that function.
+        pausedByVisibility = true;
+      }
+    } else {
+      // Tab is visible again
+      if (pausedByVisibility && isPaused) {
+        pausedByVisibility = false;
+        resumeMetronome();
+      }
+      if (isPlaying || isPaused) {
+        acquireWakeLock();
+      }
     }
   });
 
