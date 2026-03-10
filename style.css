@@ -191,6 +191,14 @@ html, body {
 .nav-btn:hover:not(:disabled) { background: #30306a; }
 .nav-btn:disabled { opacity: 0.35; cursor: default; }
 
+/* Destructive delete button — red tint */
+.nav-btn.delete-btn {
+  padding: 4px 9px;
+  color: var(--accent2);
+  border-color: var(--accent2);
+}
+.nav-btn.delete-btn:hover:not(:disabled) { background: rgba(255, 87, 68, 0.15); }
+
 #song-position {
   font-size: 0.82rem;
   color: var(--text2);

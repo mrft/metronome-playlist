@@ -126,7 +126,7 @@ let animationFrameId = null;
 let elPlayBtn, elStopBtn, elSoundBtn;
 let elPrevSong, elNextSong, elSongName, elSongMeta, elSongPos, elSongOrder;
 let elEditName, elEditTempo, elEditBeats, elEditSubdivision;
-let elMoveUpBtn, elMoveDownBtn, elInsertBeforeBtn, elInsertAfterBtn;
+let elMoveUpBtn, elMoveDownBtn, elInsertBeforeBtn, elInsertAfterBtn, elDeleteSongBtn;
 let elPendulum, elPendulumBob, elWeightRect, elBeatText;
 let elBeatLightsRow;
 let elValidationMsg, elApplyBtn, elToggleEditorBtn, elCloseEditorBtn, elEditorPanel;
@@ -863,6 +863,49 @@ function insertSong(offset) {
   updateUI();
   renderBeatDots(newSong.beats);
   positionWeightForTempo(newSong.tempo);
+  restartMetronomeIfPlaying();
+}
+
+/**
+ * Delete the current song from the playlist.
+ * Navigates to the next song, or to the (new) last song when the last entry
+ * was deleted.  Stops playback first; restarts on the new current song if
+ * playback was active.
+ */
+function deleteSong() {
+  if (playlist.length === 0) return;
+
+  const wasPlaying = isPlaying;
+  if (isPlaying || isPaused) stopMetronome();
+
+  playlist.splice(currentSongIndex, 1);
+
+  if (playlist.length === 0) {
+    currentSongIndex = 0;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+    syncEditorFromPlaylist();
+    updateSongDisplay();
+    updateUI();
+    renderBeatDots(0);
+    return;
+  }
+
+  // Stay at the same index (now pointing to the next song), but clamp to the
+  // last position when the deleted song was the last one.
+  currentSongIndex = Math.min(currentSongIndex, playlist.length - 1);
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+  syncEditorFromPlaylist();
+
+  updateSongDisplay();
+  updateUI();
+  const song = playlist[currentSongIndex];
+  if (song) {
+    renderBeatDots(song.beats);
+    positionWeightForTempo(song.tempo);
+  }
+
+  if (wasPlaying) startMetronome();
 }
 
 /**
@@ -998,6 +1041,7 @@ function init() {
   elMoveDownBtn     = document.getElementById('move-down-btn');
   elInsertBeforeBtn = document.getElementById('insert-before-btn');
   elInsertAfterBtn  = document.getElementById('insert-after-btn');
+  elDeleteSongBtn   = document.getElementById('delete-song-btn');
 
   elPendulum    = document.getElementById('pendulum');
   elPendulumBob = document.getElementById('pendulum-bob');
@@ -1051,6 +1095,9 @@ function init() {
   // Insert before / after buttons
   elInsertBeforeBtn.addEventListener('click', () => insertSong(0));
   elInsertAfterBtn.addEventListener('click',  () => insertSong(1));
+
+  // Delete current song button
+  elDeleteSongBtn.addEventListener('click', deleteSong);
 
   // Editor panel toggle
   elToggleEditorBtn.addEventListener('click', () => {
