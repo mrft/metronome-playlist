@@ -138,11 +138,27 @@ html, body {
   text-align: center;
 }
 
+/* Song name row: order indicator + static name or editable input */
+#song-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  min-height: 1.6em;
+}
+
+.song-order {
+  font-size: 0.82rem;
+  color: var(--text2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 #song-name {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--accent);
-  margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -159,7 +175,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 6px;
 }
 
 .nav-btn {
@@ -175,12 +191,79 @@ html, body {
 .nav-btn:hover:not(:disabled) { background: #30306a; }
 .nav-btn:disabled { opacity: 0.35; cursor: default; }
 
+/* Destructive delete button — red tint */
+.nav-btn.delete-btn {
+  padding: 4px 9px;
+  color: var(--accent2);
+  border-color: var(--accent2);
+}
+.nav-btn.delete-btn:hover:not(:disabled) { background: rgba(255, 87, 68, 0.15); }
+
 #song-position {
   font-size: 0.82rem;
   color: var(--text2);
   min-width: 52px;
   text-align: center;
 }
+
+/* ===== Edit-mode inline fields ===== */
+
+/* Edit-only elements are hidden by default; shown when body has edit-mode class */
+.edit-only { display: none; }
+body.edit-mode .edit-only { display: inline-block; }
+body.edit-mode .view-only { display: none; }
+
+/* Editable text/number fields */
+.edit-field {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.edit-field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2);
+}
+
+/* Name input stretches to fill the row */
+#edit-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+}
+
+/* Editable meta row (BPM / Beats / Subdiv) */
+#song-edit-meta {
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.edit-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.75rem;
+  color: var(--text2);
+}
+
+.edit-label .edit-field {
+  width: 72px;
+  text-align: center;
+}
+
+/* Override inline-block for the flex meta container */
+body.edit-mode #song-edit-meta { display: flex; }
 
 /* ===== Visual metronome ===== */
 #metronome-visual {

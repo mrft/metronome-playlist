@@ -122,9 +122,15 @@ let visualQueueHead = 0;
 
 let animationFrameId = null;
 
+// Screen Wake Lock
+/** @type {WakeLockSentinel|null} */
+let wakeLockSentinel = null;
+
 // DOM element references (populated in init())
 let elPlayBtn, elStopBtn, elSoundBtn;
-let elPrevSong, elNextSong, elSongName, elSongMeta, elSongPos;
+let elPrevSong, elNextSong, elSongName, elSongMeta, elSongPos, elSongOrder;
+let elEditName, elEditTempo, elEditBeats, elEditSubdivision;
+let elMoveUpBtn, elMoveDownBtn, elInsertBeforeBtn, elInsertAfterBtn, elDeleteSongBtn;
 let elPendulum, elPendulumBob, elWeightRect, elBeatText;
 let elBeatLightsRow;
 let elValidationMsg, elApplyBtn, elToggleEditorBtn, elCloseEditorBtn, elEditorPanel;
@@ -350,6 +356,41 @@ function positionWeightForTempo(tempo) {
    Metronome playback control
 ───────────────────────────────────────────────────────────────────────── */
 
+/* ── Screen Wake Lock helpers ─────────────────────────────────────────── */
+
+/**
+ * Request a screen wake lock, storing the sentinel so we can release it
+ * later.  Silently ignored when the Wake Lock API is not available.
+ */
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLockSentinel = await navigator.wakeLock.request('screen');
+    // Clear our reference when the browser releases the lock automatically
+    // (e.g., the tab was hidden).  The visibilitychange handler will
+    // re-acquire it once the tab is visible again, if still needed.
+    wakeLockSentinel.addEventListener('release', () => {
+      wakeLockSentinel = null;
+    });
+  } catch (_) {
+    // Wake lock request can fail (e.g., power-saving mode); safe to ignore.
+    wakeLockSentinel = null;
+  }
+}
+
+/**
+ * Release the screen wake lock if one is currently held.
+ */
+async function releaseWakeLock() {
+  if (!wakeLockSentinel) return;
+  try {
+    await wakeLockSentinel.release();
+  } catch (_) {
+    // Ignore errors during release.
+  }
+  wakeLockSentinel = null;
+}
+
 function startMetronome() {
   const song = playlist[currentSongIndex];
   if (!song) return;
@@ -372,6 +413,7 @@ function startMetronome() {
 
   renderBeatDots(song.beats);
   positionWeightForTempo(song.tempo);
+  acquireWakeLock();
   updateUI();
 }
 
@@ -406,6 +448,7 @@ function resumeMetronome() {
 
   isPlaying = true;
   isPaused  = false;
+  acquireWakeLock();
   updateUI();
 }
 
@@ -420,6 +463,7 @@ function stopMetronome() {
   visualQueue = [];
   visualQueueHead = 0;
 
+  releaseWakeLock();
   resetVisuals();
   updateUI();
 }
@@ -475,6 +519,7 @@ function goToSong(index) {
 function updateSongDisplay() {
   const song = playlist[currentSongIndex];
   if (song) {
+    elSongOrder.textContent = `[${currentSongIndex + 1}/${playlist.length}]`;
     elSongName.textContent = song.name;
     const subdivLabel = (song.subdivision || 1) > 1
       ? ` · ×${song.subdivision} subdivision`
@@ -482,10 +527,31 @@ function updateSongDisplay() {
     elSongMeta.textContent =
       `${song.tempo} BPM · ${song.beats} beats/bar${subdivLabel}`;
     elSongPos.textContent = `${currentSongIndex + 1} / ${playlist.length}`;
+
+    // Populate editable fields
+    elEditName.value         = song.name;
+    elEditTempo.value        = song.tempo;
+    elEditBeats.value        = song.beats;
+    elEditSubdivision.value  = song.subdivision || 1;
+    elEditName.disabled        = false;
+    elEditTempo.disabled       = false;
+    elEditBeats.disabled       = false;
+    elEditSubdivision.disabled = false;
   } else {
-    elSongName.textContent = 'No playlist loaded';
-    elSongMeta.textContent = '';
-    elSongPos.textContent  = '';
+    elSongOrder.textContent  = '';
+    elSongName.textContent   = 'No playlist loaded';
+    elSongMeta.textContent   = '';
+    elSongPos.textContent    = '';
+
+    // Clear and disable edit inputs so stale values are not shown
+    elEditName.value         = '';
+    elEditTempo.value        = '';
+    elEditBeats.value        = '';
+    elEditSubdivision.value  = '';
+    elEditName.disabled        = true;
+    elEditTempo.disabled       = true;
+    elEditBeats.disabled       = true;
+    elEditSubdivision.disabled = true;
   }
 }
 
@@ -507,6 +573,8 @@ function updateUI() {
 
   elPrevSong.disabled = currentSongIndex <= 0;
   elNextSong.disabled = currentSongIndex >= playlist.length - 1;
+  elMoveUpBtn.disabled   = currentSongIndex <= 0;
+  elMoveDownBtn.disabled = currentSongIndex >= playlist.length - 1;
 
   if (soundEnabled) {
     elSoundBtn.textContent = '🔊';
@@ -566,6 +634,7 @@ function activateFallbackEditor() {
 
   fallback.value = initialJson;
   fallback.addEventListener('input', refreshValidationStatus);
+  fallback.addEventListener('blur', applyPlaylistOnEditorBlur);
 
   // Tab key inserts two spaces instead of moving focus
   fallback.addEventListener('keydown', (e) => {
@@ -666,6 +735,9 @@ function initMonaco() {
       // Validate on every content change
       model.onDidChangeContent(() => refreshValidationStatus());
 
+      // Apply playlist whenever the editor loses focus (editor blur)
+      monacoEditor.onDidBlurEditorText(applyPlaylistOnEditorBlur);
+
       // Run initial validation and load playlist
       refreshValidationStatus();
       applyPlaylist();
@@ -735,6 +807,263 @@ function applyPlaylist() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Edit-mode helpers: sync, field blur, move song
+───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Push the current in-memory playlist into whichever editor is active
+ * without resetting the current song index or triggering an apply loop.
+ */
+function syncEditorFromPlaylist() {
+  const json = JSON.stringify(playlist, null, 2);
+  if (usingFallbackEditor) {
+    const ta = document.getElementById('fallback-editor');
+    if (ta) ta.value = json;
+  } else if (monacoEditor) {
+    monacoEditor.setValue(json);
+  }
+  refreshValidationStatus();
+}
+
+/**
+ * If the metronome is currently playing or paused, stop it and restart if
+ * it was playing.  Used after in-place song edits to pick up new settings.
+ */
+function restartMetronomeIfPlaying() {
+  if (isPlaying || isPaused) {
+    const wasPlaying = isPlaying;
+    stopMetronome();
+    if (wasPlaying) startMetronome();
+  }
+}
+
+/**
+ * Called when any editable song field (name / tempo / beats / subdivision)
+ * loses focus.  Validates the new values, updates the playlist in memory,
+ * syncs the JSON editor and refreshes the metronome visuals.
+ */
+function onEditFieldBlur() {
+  if (!playlist[currentSongIndex]) return;
+
+  const name        = elEditName.value.trim();
+  const tempo       = parseFloat(elEditTempo.value);
+  const beats       = parseInt(elEditBeats.value, 10);
+  const subdivision = parseInt(elEditSubdivision.value, 10);
+
+  // Reject invalid values and restore the previous display
+  if (
+    !name ||
+    isNaN(tempo) || tempo < 20 || tempo > 400 ||
+    isNaN(beats) || beats < 1  || beats > 32  ||
+    isNaN(subdivision) || subdivision < 1 || subdivision > 8
+  ) {
+    updateSongDisplay();
+    return;
+  }
+
+  // Update in-memory playlist and persist
+  playlist[currentSongIndex] = { ...playlist[currentSongIndex], name, tempo, beats, subdivision };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+
+  // Sync JSON editor and refresh static display
+  syncEditorFromPlaylist();
+  updateSongDisplay();
+
+  // Refresh visual metronome
+  renderBeatDots(beats);
+  positionWeightForTempo(tempo);
+
+  restartMetronomeIfPlaying();
+}
+
+/**
+ * Move the currently selected song up (-1) or down (+1) in the playlist.
+ * @param {-1|1} direction
+ */
+function moveSong(direction) {
+  const newIndex = currentSongIndex + direction;
+  if (newIndex < 0 || newIndex >= playlist.length) return;
+
+  // Swap the two songs
+  [playlist[currentSongIndex], playlist[newIndex]] = [playlist[newIndex], playlist[currentSongIndex]];
+  currentSongIndex = newIndex;
+
+  // Persist and sync editor
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+  syncEditorFromPlaylist();
+
+  updateSongDisplay();
+  updateUI();
+  const song = playlist[currentSongIndex];
+  if (song) {
+    renderBeatDots(song.beats);
+    positionWeightForTempo(song.tempo);
+  }
+}
+
+/**
+ * Insert a new song with default settings before (offset 0) or after
+ * (offset 1) the current song, then navigate to it.
+ * @param {0|1} offset  0 = insert before current, 1 = insert after current
+ */
+function insertSong(offset) {
+  const newSong = { name: 'New Song', tempo: 100, beats: 4, subdivision: 1 };
+  const insertIndex = playlist.length === 0 ? 0 : currentSongIndex + offset;
+  playlist.splice(insertIndex, 0, newSong);
+  currentSongIndex = insertIndex;
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+  syncEditorFromPlaylist();
+
+  updateSongDisplay();
+  updateUI();
+  renderBeatDots(newSong.beats);
+  positionWeightForTempo(newSong.tempo);
+  restartMetronomeIfPlaying();
+}
+
+/**
+ * Delete the current song from the playlist.
+ * Navigates to the next song, or to the (new) last song when the last entry
+ * was deleted.  Stops playback first; restarts on the new current song if
+ * playback was active.
+ */
+function deleteSong() {
+  if (playlist.length === 0) return;
+
+  const wasPlaying = isPlaying;
+  if (isPlaying || isPaused) stopMetronome();
+
+  playlist.splice(currentSongIndex, 1);
+
+  if (playlist.length === 0) {
+    currentSongIndex = 0;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+    syncEditorFromPlaylist();
+    updateSongDisplay();
+    updateUI();
+    renderBeatDots(0);
+    return;
+  }
+
+  // Stay at the same index (now pointing to the next song), but clamp to the
+  // last position when the deleted song was the last one.
+  currentSongIndex = Math.min(currentSongIndex, playlist.length - 1);
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+  syncEditorFromPlaylist();
+
+  updateSongDisplay();
+  updateUI();
+  const song = playlist[currentSongIndex];
+  if (song) {
+    renderBeatDots(song.beats);
+    positionWeightForTempo(song.tempo);
+  }
+
+  if (wasPlaying) startMetronome();
+}
+
+/**
+ * Called on `input` events for the numeric edit fields (tempo / beats /
+ * subdivision).  Applies the new values immediately when all fields are valid,
+ * without restoring the fields on invalid mid-typing states.
+ */
+function onEditFieldInput() {
+  if (!playlist[currentSongIndex]) return;
+
+  const name        = elEditName.value.trim();
+  const tempo       = parseFloat(elEditTempo.value);
+  const beats       = parseInt(elEditBeats.value, 10);
+  const subdivision = parseInt(elEditSubdivision.value, 10);
+
+  // Only apply when every field is currently valid; otherwise do nothing
+  // (onEditFieldBlur will restore invalid values when focus leaves the field)
+  if (
+    !name ||
+    isNaN(tempo) || tempo < 20 || tempo > 400 ||
+    isNaN(beats) || beats < 1  || beats > 32  ||
+    isNaN(subdivision) || subdivision < 1 || subdivision > 8
+  ) {
+    return;
+  }
+
+  // Update in-memory playlist and persist
+  playlist[currentSongIndex] = { ...playlist[currentSongIndex], name, tempo, beats, subdivision };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+
+  // Sync JSON editor (without resetting the edit fields themselves)
+  syncEditorFromPlaylist();
+
+  // Refresh metronome visuals
+  renderBeatDots(beats);
+  positionWeightForTempo(tempo);
+
+  // Restart if currently playing so the new settings take effect immediately
+  restartMetronomeIfPlaying();
+}
+
+/**
+ * Like applyPlaylist() but called on editor blur: applies valid JSON while
+ * preserving the current song index (clamped to the new playlist length).
+ * Does not show the "✓ Applied!" button feedback.
+ * No-ops when the serialised content is identical to the current playlist
+ * (avoids audible interruptions when the user clicks away without changing
+ * anything).  Also validates required per-song fields before applying.
+ */
+function applyPlaylistOnEditorBlur() {
+  const value = getEditorValue();
+  if (!value) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch (_) {
+    return; // keep whatever is in memory; don't disrupt playback
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+  // Validate required per-song fields/ranges (same rules as onEditFieldBlur)
+  for (const s of parsed) {
+    const name        = typeof s.name === 'string' ? s.name.trim() : '';
+    const tempo       = parseFloat(s.tempo);
+    const beats       = parseInt(s.beats, 10);
+    const subdivision = parseInt(s.subdivision ?? 1, 10);
+    if (
+      !name ||
+      isNaN(tempo) || tempo < 20 || tempo > 400 ||
+      isNaN(beats) || beats < 1  || beats > 32  ||
+      isNaN(subdivision) || subdivision < 1 || subdivision > 8
+    ) {
+      return; // silently ignore; user will see the problem on explicit Apply
+    }
+  }
+
+  // Skip stop/restart if the playlist content has not actually changed.
+  // Normalise both sides identically (subdivision default first) so key
+  // ordering differences don't produce false negatives.
+  const normalized        = parsed.map(s => ({ subdivision: 1, ...s }));
+  const normalizedCurrent = playlist.map(s => ({ subdivision: 1, ...s }));
+  if (JSON.stringify(normalized) === JSON.stringify(normalizedCurrent)) return;
+
+  const wasPlaying   = isPlaying;
+  const savedIndex   = currentSongIndex;
+  if (isPlaying || isPaused) stopMetronome();
+
+  playlist          = normalized;
+  currentSongIndex  = Math.min(savedIndex, playlist.length - 1);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+
+  updateSongDisplay();
+  updateUI();
+  const song = playlist[currentSongIndex];
+  if (song) {
+    renderBeatDots(song.beats);
+    positionWeightForTempo(song.tempo);
+  }
+  if (wasPlaying) startMetronome();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Editor panel toggle
 ───────────────────────────────────────────────────────────────────────── */
 
@@ -742,9 +1071,15 @@ function setEditorVisible(visible) {
   if (visible) {
     elEditorPanel.classList.remove('editor-hidden');
     elToggleEditorBtn.setAttribute('aria-pressed', 'true');
+    elToggleEditorBtn.textContent = '✏️ Toggle Play Mode';
+    elToggleEditorBtn.setAttribute('aria-label', 'Toggle Play Mode');
+    document.body.classList.add('edit-mode');
   } else {
     elEditorPanel.classList.add('editor-hidden');
     elToggleEditorBtn.setAttribute('aria-pressed', 'false');
+    elToggleEditorBtn.textContent = '▶ Toggle Edit Mode';
+    elToggleEditorBtn.setAttribute('aria-label', 'Toggle Edit Mode');
+    document.body.classList.remove('edit-mode');
   }
 
   // On mobile the editor panel is always in the DOM (overflow-scroll layout).
@@ -778,6 +1113,17 @@ function init() {
   elSongName  = document.getElementById('song-name');
   elSongMeta  = document.getElementById('song-meta');
   elSongPos   = document.getElementById('song-position');
+  elSongOrder = document.getElementById('song-order');
+
+  elEditName        = document.getElementById('edit-name');
+  elEditTempo       = document.getElementById('edit-tempo');
+  elEditBeats       = document.getElementById('edit-beats');
+  elEditSubdivision = document.getElementById('edit-subdivision');
+  elMoveUpBtn       = document.getElementById('move-up-btn');
+  elMoveDownBtn     = document.getElementById('move-down-btn');
+  elInsertBeforeBtn = document.getElementById('insert-before-btn');
+  elInsertAfterBtn  = document.getElementById('insert-after-btn');
+  elDeleteSongBtn   = document.getElementById('delete-song-btn');
 
   elPendulum    = document.getElementById('pendulum');
   elPendulumBob = document.getElementById('pendulum-bob');
@@ -814,6 +1160,27 @@ function init() {
   elPrevSong.addEventListener('click', () => goToSong(currentSongIndex - 1));
   elNextSong.addEventListener('click', () => goToSong(currentSongIndex + 1));
 
+  // Edit-mode field changes → sync to editor on blur
+  [elEditName, elEditTempo, elEditBeats, elEditSubdivision].forEach(el => {
+    el.addEventListener('blur', onEditFieldBlur);
+  });
+
+  // Number fields also respond immediately on input (e.g. spinner up/down)
+  [elEditTempo, elEditBeats, elEditSubdivision].forEach(el => {
+    el.addEventListener('input', onEditFieldInput);
+  });
+
+  // Move up / down buttons
+  elMoveUpBtn.addEventListener('click',   () => moveSong(-1));
+  elMoveDownBtn.addEventListener('click', () => moveSong(1));
+
+  // Insert before / after buttons
+  elInsertBeforeBtn.addEventListener('click', () => insertSong(0));
+  elInsertAfterBtn.addEventListener('click',  () => insertSong(1));
+
+  // Delete current song button
+  elDeleteSongBtn.addEventListener('click', deleteSong);
+
   // Editor panel toggle
   elToggleEditorBtn.addEventListener('click', () => {
     const hidden = elEditorPanel.classList.contains('editor-hidden');
@@ -824,7 +1191,19 @@ function init() {
   // Apply button
   elApplyBtn.addEventListener('click', applyPlaylist);
 
+  // Re-acquire the wake lock when the tab becomes visible again after being
+  // hidden (the browser automatically releases wake locks on visibility loss).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && (isPlaying || isPaused)) {
+      acquireWakeLock();
+    }
+  });
+
   // Set initial UI state
+  // Set initial edit-mode state (editor starts visible by default)
+  const editorStartsVisible = !elEditorPanel.classList.contains('editor-hidden');
+  setEditorVisible(editorStartsVisible);
+
   updateUI();
 
   // If the Monaco loader script failed (e.g., CDN blocked/offline), activate fallback immediately
