@@ -533,11 +533,25 @@ function updateSongDisplay() {
     elEditTempo.value        = song.tempo;
     elEditBeats.value        = song.beats;
     elEditSubdivision.value  = song.subdivision || 1;
+    elEditName.disabled        = false;
+    elEditTempo.disabled       = false;
+    elEditBeats.disabled       = false;
+    elEditSubdivision.disabled = false;
   } else {
     elSongOrder.textContent  = '';
     elSongName.textContent   = 'No playlist loaded';
     elSongMeta.textContent   = '';
     elSongPos.textContent    = '';
+
+    // Clear and disable edit inputs so stale values are not shown
+    elEditName.value         = '';
+    elEditTempo.value        = '';
+    elEditBeats.value        = '';
+    elEditSubdivision.value  = '';
+    elEditName.disabled        = true;
+    elEditTempo.disabled       = true;
+    elEditBeats.disabled       = true;
+    elEditSubdivision.disabled = true;
   }
 }
 
