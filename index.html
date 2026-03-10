@@ -13,7 +13,7 @@
     <div id="player-panel">
       <header class="panel-header">
         <h1>🎵 Metronome Playlist</h1>
-        <button id="toggle-editor-btn" class="header-btn" title="Toggle editor" aria-pressed="true" aria-label="Toggle editor">✏️ Editor</button>
+        <button id="toggle-editor-btn" class="header-btn" title="Toggle editor" aria-pressed="true" aria-label="Toggle Play Mode">✏️ Toggle Play Mode</button>
       </header>
 
       <!-- Current song info + prev/next -->
@@ -32,11 +32,13 @@
           <label class="edit-label">Subdiv<input id="edit-subdivision" class="edit-field" type="number" min="1" max="8" step="1" aria-label="Subdivision" /></label>
         </div>
         <div id="song-nav">
+          <button id="insert-before-btn" class="nav-btn edit-only" title="Insert new song before current" aria-label="Insert song before">+</button>
           <button id="move-up-btn" class="nav-btn edit-only" title="Move song up in playlist" aria-label="Move song up">↑</button>
           <button id="prev-song-btn" class="nav-btn" title="Previous song" aria-label="Previous song">&#9664;</button>
           <span id="song-position"></span>
           <button id="next-song-btn" class="nav-btn" title="Next song" aria-label="Next song">&#9654;</button>
           <button id="move-down-btn" class="nav-btn edit-only" title="Move song down in playlist" aria-label="Move song down">↓</button>
+          <button id="insert-after-btn" class="nav-btn edit-only" title="Insert new song after current" aria-label="Insert song after">+</button>
         </div>
       </section>
 

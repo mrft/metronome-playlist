@@ -126,7 +126,7 @@ let animationFrameId = null;
 let elPlayBtn, elStopBtn, elSoundBtn;
 let elPrevSong, elNextSong, elSongName, elSongMeta, elSongPos, elSongOrder;
 let elEditName, elEditTempo, elEditBeats, elEditSubdivision;
-let elMoveUpBtn, elMoveDownBtn;
+let elMoveUpBtn, elMoveDownBtn, elInsertBeforeBtn, elInsertAfterBtn;
 let elPendulum, elPendulumBob, elWeightRect, elBeatText;
 let elBeatLightsRow;
 let elValidationMsg, elApplyBtn, elToggleEditorBtn, elCloseEditorBtn, elEditorPanel;
@@ -770,6 +770,18 @@ function syncEditorFromPlaylist() {
 }
 
 /**
+ * If the metronome is currently playing or paused, stop it and restart if
+ * it was playing.  Used after in-place song edits to pick up new settings.
+ */
+function restartMetronomeIfPlaying() {
+  if (isPlaying || isPaused) {
+    const wasPlaying = isPlaying;
+    stopMetronome();
+    if (wasPlaying) startMetronome();
+  }
+}
+
+/**
  * Called when any editable song field (name / tempo / beats / subdivision)
  * loses focus.  Validates the new values, updates the playlist in memory,
  * syncs the JSON editor and refreshes the metronome visuals.
@@ -805,12 +817,7 @@ function onEditFieldBlur() {
   renderBeatDots(beats);
   positionWeightForTempo(tempo);
 
-  // Restart if currently playing so the new settings take effect immediately
-  if (isPlaying || isPaused) {
-    const wasPlaying = isPlaying;
-    stopMetronome();
-    if (wasPlaying) startMetronome();
-  }
+  restartMetronomeIfPlaying();
 }
 
 /**
@@ -836,6 +843,65 @@ function moveSong(direction) {
     renderBeatDots(song.beats);
     positionWeightForTempo(song.tempo);
   }
+}
+
+/**
+ * Insert a new song with default settings before (offset 0) or after
+ * (offset 1) the current song, then navigate to it.
+ * @param {0|1} offset  0 = insert before current, 1 = insert after current
+ */
+function insertSong(offset) {
+  const newSong = { name: 'New Song', tempo: 100, beats: 4, subdivision: 1 };
+  const insertIndex = playlist.length === 0 ? 0 : currentSongIndex + offset;
+  playlist.splice(insertIndex, 0, newSong);
+  currentSongIndex = insertIndex;
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+  syncEditorFromPlaylist();
+
+  updateSongDisplay();
+  updateUI();
+  renderBeatDots(newSong.beats);
+  positionWeightForTempo(newSong.tempo);
+}
+
+/**
+ * Called on `input` events for the numeric edit fields (tempo / beats /
+ * subdivision).  Applies the new values immediately when all fields are valid,
+ * without restoring the fields on invalid mid-typing states.
+ */
+function onEditFieldInput() {
+  if (!playlist[currentSongIndex]) return;
+
+  const name        = elEditName.value.trim();
+  const tempo       = parseFloat(elEditTempo.value);
+  const beats       = parseInt(elEditBeats.value, 10);
+  const subdivision = parseInt(elEditSubdivision.value, 10);
+
+  // Only apply when every field is currently valid; otherwise do nothing
+  // (onEditFieldBlur will restore invalid values when focus leaves the field)
+  if (
+    !name ||
+    isNaN(tempo) || tempo < 20 || tempo > 400 ||
+    isNaN(beats) || beats < 1  || beats > 32  ||
+    isNaN(subdivision) || subdivision < 1 || subdivision > 8
+  ) {
+    return;
+  }
+
+  // Update in-memory playlist and persist
+  playlist[currentSongIndex] = { ...playlist[currentSongIndex], name, tempo, beats, subdivision };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+
+  // Sync JSON editor (without resetting the edit fields themselves)
+  syncEditorFromPlaylist();
+
+  // Refresh metronome visuals
+  renderBeatDots(beats);
+  positionWeightForTempo(tempo);
+
+  // Restart if currently playing so the new settings take effect immediately
+  restartMetronomeIfPlaying();
 }
 
 /**
@@ -880,10 +946,14 @@ function setEditorVisible(visible) {
   if (visible) {
     elEditorPanel.classList.remove('editor-hidden');
     elToggleEditorBtn.setAttribute('aria-pressed', 'true');
+    elToggleEditorBtn.textContent = '✏️ Toggle Play Mode';
+    elToggleEditorBtn.setAttribute('aria-label', 'Toggle Play Mode');
     document.body.classList.add('edit-mode');
   } else {
     elEditorPanel.classList.add('editor-hidden');
     elToggleEditorBtn.setAttribute('aria-pressed', 'false');
+    elToggleEditorBtn.textContent = '▶ Toggle Edit Mode';
+    elToggleEditorBtn.setAttribute('aria-label', 'Toggle Edit Mode');
     document.body.classList.remove('edit-mode');
   }
 
@@ -926,6 +996,8 @@ function init() {
   elEditSubdivision = document.getElementById('edit-subdivision');
   elMoveUpBtn       = document.getElementById('move-up-btn');
   elMoveDownBtn     = document.getElementById('move-down-btn');
+  elInsertBeforeBtn = document.getElementById('insert-before-btn');
+  elInsertAfterBtn  = document.getElementById('insert-after-btn');
 
   elPendulum    = document.getElementById('pendulum');
   elPendulumBob = document.getElementById('pendulum-bob');
@@ -967,9 +1039,18 @@ function init() {
     el.addEventListener('blur', onEditFieldBlur);
   });
 
+  // Number fields also respond immediately on input (e.g. spinner up/down)
+  [elEditTempo, elEditBeats, elEditSubdivision].forEach(el => {
+    el.addEventListener('input', onEditFieldInput);
+  });
+
   // Move up / down buttons
   elMoveUpBtn.addEventListener('click',   () => moveSong(-1));
   elMoveDownBtn.addEventListener('click', () => moveSong(1));
+
+  // Insert before / after buttons
+  elInsertBeforeBtn.addEventListener('click', () => insertSong(0));
+  elInsertAfterBtn.addEventListener('click',  () => insertSong(1));
 
   // Editor panel toggle
   elToggleEditorBtn.addEventListener('click', () => {
@@ -984,9 +1065,7 @@ function init() {
   // Set initial UI state
   // Set initial edit-mode state (editor starts visible by default)
   const editorStartsVisible = !elEditorPanel.classList.contains('editor-hidden');
-  if (editorStartsVisible) {
-    document.body.classList.add('edit-mode');
-  }
+  setEditorVisible(editorStartsVisible);
 
   updateUI();
 
