@@ -122,6 +122,10 @@ let visualQueueHead = 0;
 
 let animationFrameId = null;
 
+// Screen Wake Lock
+/** @type {WakeLockSentinel|null} */
+let wakeLockSentinel = null;
+
 // DOM element references (populated in init())
 let elPlayBtn, elStopBtn, elSoundBtn;
 let elPrevSong, elNextSong, elSongName, elSongMeta, elSongPos, elSongOrder;
@@ -352,6 +356,41 @@ function positionWeightForTempo(tempo) {
    Metronome playback control
 ───────────────────────────────────────────────────────────────────────── */
 
+/* ── Screen Wake Lock helpers ─────────────────────────────────────────── */
+
+/**
+ * Request a screen wake lock, storing the sentinel so we can release it
+ * later.  Silently ignored when the Wake Lock API is not available.
+ */
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLockSentinel = await navigator.wakeLock.request('screen');
+    // Clear our reference when the browser releases the lock automatically
+    // (e.g., the tab was hidden).  The visibilitychange handler will
+    // re-acquire it once the tab is visible again, if still needed.
+    wakeLockSentinel.addEventListener('release', () => {
+      wakeLockSentinel = null;
+    });
+  } catch (_) {
+    // Wake lock request can fail (e.g., power-saving mode); safe to ignore.
+    wakeLockSentinel = null;
+  }
+}
+
+/**
+ * Release the screen wake lock if one is currently held.
+ */
+async function releaseWakeLock() {
+  if (!wakeLockSentinel) return;
+  try {
+    await wakeLockSentinel.release();
+  } catch (_) {
+    // Ignore errors during release.
+  }
+  wakeLockSentinel = null;
+}
+
 function startMetronome() {
   const song = playlist[currentSongIndex];
   if (!song) return;
@@ -374,6 +413,7 @@ function startMetronome() {
 
   renderBeatDots(song.beats);
   positionWeightForTempo(song.tempo);
+  acquireWakeLock();
   updateUI();
 }
 
@@ -408,6 +448,7 @@ function resumeMetronome() {
 
   isPlaying = true;
   isPaused  = false;
+  acquireWakeLock();
   updateUI();
 }
 
@@ -422,6 +463,7 @@ function stopMetronome() {
   visualQueue = [];
   visualQueueHead = 0;
 
+  releaseWakeLock();
   resetVisuals();
   updateUI();
 }
@@ -1108,6 +1150,14 @@ function init() {
 
   // Apply button
   elApplyBtn.addEventListener('click', applyPlaylist);
+
+  // Re-acquire the wake lock when the tab becomes visible again after being
+  // hidden (the browser automatically releases wake locks on visibility loss).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && (isPlaying || isPaused)) {
+      acquireWakeLock();
+    }
+  });
 
   // Set initial UI state
   // Set initial edit-mode state (editor starts visible by default)
