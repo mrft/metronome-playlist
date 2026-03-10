@@ -719,6 +719,17 @@ function setEditorVisible(visible) {
   } else {
     elEditorPanel.classList.add('editor-hidden');
   }
+
+  // On mobile the editor panel is always in the DOM (overflow-scroll layout).
+  // Scroll the viewport to whichever panel is now active.
+  if (window.matchMedia('(max-width: 680px)').matches) {
+    const target = visible ? elEditorPanel : document.getElementById('player-panel');
+    const prefersReducedMotion =
+      window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const scrollBehavior = prefersReducedMotion ? 'auto' : 'smooth';
+    target.scrollIntoView({ behavior: scrollBehavior, block: 'start' });
+  }
+
   // Give the CSS transition time to complete before asking Monaco to re-layout
   if (monacoEditor) {
     setTimeout(() => monacoEditor.layout(), 280);
