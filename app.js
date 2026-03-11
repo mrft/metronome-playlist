@@ -101,6 +101,8 @@ let currentSongIndex = 0;
 
 let isPlaying = false;
 let isPaused  = false;
+/** True when the metronome was auto-paused because the page became hidden. */
+let pausedByVisibility = false;
 let soundEnabled = true;
 
 // Metronome engine state
@@ -423,8 +425,17 @@ function pauseMetronome() {
   cancelAnimationFrame(animationFrameId);
   animationFrameId = null;
 
+  // Suspend the AudioContext so it stops consuming CPU while paused.
+  if (audioCtx && audioCtx.state === 'running') {
+    void audioCtx.suspend().catch(() => {
+      // Ignore errors if the AudioContext is already closed or cannot be suspended.
+    });
+  }
+
   isPaused  = true;
   isPlaying = false;
+  // A user-initiated pause should not trigger an auto-resume on visibility restore.
+  pausedByVisibility = false;
   updateUI();
 }
 
@@ -460,6 +471,7 @@ function stopMetronome() {
 
   isPlaying = false;
   isPaused  = false;
+  pausedByVisibility = false;
   visualQueue = [];
   visualQueueHead = 0;
 
@@ -1070,13 +1082,17 @@ function applyPlaylistOnEditorBlur() {
 function setEditorVisible(visible) {
   if (visible) {
     elEditorPanel.classList.remove('editor-hidden');
+    elEditorPanel.setAttribute('aria-hidden', 'false');
     elToggleEditorBtn.setAttribute('aria-pressed', 'true');
+    elToggleEditorBtn.setAttribute('title', 'Toggle Play Mode');
     elToggleEditorBtn.textContent = '✏️ Toggle Play Mode';
     elToggleEditorBtn.setAttribute('aria-label', 'Toggle Play Mode');
     document.body.classList.add('edit-mode');
   } else {
     elEditorPanel.classList.add('editor-hidden');
+    elEditorPanel.setAttribute('aria-hidden', 'true');
     elToggleEditorBtn.setAttribute('aria-pressed', 'false');
+    elToggleEditorBtn.setAttribute('title', 'Toggle Edit Mode');
     elToggleEditorBtn.textContent = '▶ Toggle Edit Mode';
     elToggleEditorBtn.setAttribute('aria-label', 'Toggle Edit Mode');
     document.body.classList.remove('edit-mode');
@@ -1191,11 +1207,27 @@ function init() {
   // Apply button
   elApplyBtn.addEventListener('click', applyPlaylist);
 
-  // Re-acquire the wake lock when the tab becomes visible again after being
-  // hidden (the browser automatically releases wake locks on visibility loss).
+  // Page Visibility API: auto-pause when the tab is hidden, auto-resume when
+  // it becomes visible again (only if we were the ones who paused it).
+  // Also re-acquire the wake lock on visibility restore, because the browser
+  // automatically releases wake locks when the page is hidden.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && (isPlaying || isPaused)) {
-      acquireWakeLock();
+    if (document.visibilityState === 'hidden') {
+      if (isPlaying) {
+        pauseMetronome();
+        // Mark as auto-paused *after* pauseMetronome() so the flag is not
+        // cleared by the "user-initiated pause" reset inside that function.
+        pausedByVisibility = true;
+      }
+    } else if (document.visibilityState === 'visible') {
+      // Tab is visible again
+      if (pausedByVisibility && isPaused) {
+        pausedByVisibility = false;
+        resumeMetronome();
+      }
+      if (isPlaying || isPaused) {
+        acquireWakeLock();
+      }
     }
   });
 
