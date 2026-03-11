@@ -427,7 +427,9 @@ function pauseMetronome() {
 
   // Suspend the AudioContext so it stops consuming CPU while paused.
   if (audioCtx && audioCtx.state === 'running') {
-    audioCtx.suspend();
+    void audioCtx.suspend().catch(() => {
+      // Ignore errors if the AudioContext is already closed or cannot be suspended.
+    });
   }
 
   isPaused  = true;
@@ -1080,13 +1082,17 @@ function applyPlaylistOnEditorBlur() {
 function setEditorVisible(visible) {
   if (visible) {
     elEditorPanel.classList.remove('editor-hidden');
+    elEditorPanel.setAttribute('aria-hidden', 'false');
     elToggleEditorBtn.setAttribute('aria-pressed', 'true');
+    elToggleEditorBtn.setAttribute('title', 'Toggle Play Mode');
     elToggleEditorBtn.textContent = '✏️ Toggle Play Mode';
     elToggleEditorBtn.setAttribute('aria-label', 'Toggle Play Mode');
     document.body.classList.add('edit-mode');
   } else {
     elEditorPanel.classList.add('editor-hidden');
+    elEditorPanel.setAttribute('aria-hidden', 'true');
     elToggleEditorBtn.setAttribute('aria-pressed', 'false');
+    elToggleEditorBtn.setAttribute('title', 'Toggle Edit Mode');
     elToggleEditorBtn.textContent = '▶ Toggle Edit Mode';
     elToggleEditorBtn.setAttribute('aria-label', 'Toggle Edit Mode');
     document.body.classList.remove('edit-mode');
@@ -1213,7 +1219,7 @@ function init() {
         // cleared by the "user-initiated pause" reset inside that function.
         pausedByVisibility = true;
       }
-    } else {
+    } else if (document.visibilityState === 'visible') {
       // Tab is visible again
       if (pausedByVisibility && isPaused) {
         pausedByVisibility = false;
