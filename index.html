@@ -13,7 +13,7 @@
     <div id="player-panel">
       <header class="panel-header">
         <h1>🎵 Metronome Playlist</h1>
-        <button id="toggle-editor-btn" class="header-btn" title="Toggle Play Mode" aria-pressed="true" aria-label="Toggle Play Mode">✏️ Toggle Play Mode</button>
+        <button id="toggle-editor-btn" class="header-btn" title="Toggle Edit Mode" aria-pressed="false" aria-label="Toggle Edit Mode">✏️ Toggle Edit Mode</button>
       </header>
 
       <!-- Current song info + prev/next -->
@@ -45,44 +45,45 @@
 
       <!-- Visual metronome -->
       <section id="metronome-visual">
-        <svg id="pendulum-svg" viewBox="0 0 200 305" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pendulum metronome">
+        <svg id="pendulum-svg" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pendulum metronome">
+          <g transform="translate(0,-50)">
+            <!-- Metronome body (pyramid / trapezoid) -->
+            <polygon points="58,295 142,295 124,148 76,148" fill="#1a1a38"/>
+            <polygon points="60,293 140,293 122,150 78,150" fill="#22224a"/>
 
-          <!-- Metronome body (pyramid / trapezoid) -->
-          <polygon points="58,295 142,295 124,148 76,148" fill="#1a1a38"/>
-          <polygon points="60,293 140,293 122,150 78,150" fill="#22224a"/>
+            <!-- Scale lines on the body -->
+            <line x1="88" y1="173" x2="112" y2="173" stroke="#35356a" stroke-width="1.2"/>
+            <line x1="90" y1="188" x2="110" y2="188" stroke="#35356a" stroke-width="1.2"/>
+            <line x1="90" y1="203" x2="110" y2="203" stroke="#35356a" stroke-width="1.2"/>
+            <line x1="90" y1="218" x2="110" y2="218" stroke="#35356a" stroke-width="1.2"/>
+            <line x1="88" y1="233" x2="112" y2="233" stroke="#35356a" stroke-width="1.2"/>
 
-          <!-- Scale lines on the body -->
-          <line x1="88" y1="173" x2="112" y2="173" stroke="#35356a" stroke-width="1.2"/>
-          <line x1="90" y1="188" x2="110" y2="188" stroke="#35356a" stroke-width="1.2"/>
-          <line x1="90" y1="203" x2="110" y2="203" stroke="#35356a" stroke-width="1.2"/>
-          <line x1="90" y1="218" x2="110" y2="218" stroke="#35356a" stroke-width="1.2"/>
-          <line x1="88" y1="233" x2="112" y2="233" stroke="#35356a" stroke-width="1.2"/>
+            <!-- Body outline -->
+            <polygon points="58,295 142,295 124,148 76,148" fill="none" stroke="#3a3a72" stroke-width="1.5"/>
 
-          <!-- Body outline -->
-          <polygon points="58,295 142,295 124,148 76,148" fill="none" stroke="#3a3a72" stroke-width="1.5"/>
+            <!-- Beat count display inside body -->
+            <text id="beat-text" x="100" y="252" text-anchor="middle"
+                  fill="#7070a0" font-size="20" font-family="monospace" font-weight="bold">—</text>
 
-          <!-- Beat count display inside body -->
-          <text id="beat-text" x="100" y="252" text-anchor="middle"
-                fill="#7070a0" font-size="20" font-family="monospace" font-weight="bold">—</text>
+            <!-- Pendulum group — rotates around the pivot at (100, 197).
+                Drawn LAST so it always renders on top of the body. -->
+            <g id="pendulum">
+              <!-- Rod (runs from top tail through pivot to bob) -->
+              <line x1="100" y1="60" x2="100" y2="287" stroke="#c0c0de" stroke-width="2.2" stroke-linecap="round"/>
+              <!-- BPM weight (position on rod indicates tempo) -->
+              <rect id="weight-rect" x="93" y="108" width="14" height="11" rx="3" fill="#6060c0"/>
+              <!-- Bob at the bottom of the rod -->
+              <circle id="pendulum-bob" cx="100" cy="283" r="11" fill="#4a9eff"/>
+            </g>
 
-          <!-- Pendulum group — rotates around the pivot at (100, 197).
-               Drawn LAST so it always renders on top of the body. -->
-          <g id="pendulum">
-            <!-- Rod (runs from top tail through pivot to bob) -->
-            <line x1="100" y1="60" x2="100" y2="287" stroke="#c0c0de" stroke-width="2.2" stroke-linecap="round"/>
-            <!-- BPM weight (position on rod indicates tempo) -->
-            <rect id="weight-rect" x="93" y="108" width="14" height="11" rx="3" fill="#6060c0"/>
-            <!-- Bob at the bottom of the rod -->
-            <circle id="pendulum-bob" cx="100" cy="283" r="11" fill="#4a9eff"/>
-          </g>
+            <!-- Pivot pin — drawn after pendulum so it sits on top of the rod -->
+            <circle cx="100" cy="197" r="5" fill="#666"/>
+            <circle cx="100" cy="197" r="2.5" fill="#ccc"/>
+          </svg>
 
-          <!-- Pivot pin — drawn after pendulum so it sits on top of the rod -->
-          <circle cx="100" cy="197" r="5" fill="#666"/>
-          <circle cx="100" cy="197" r="2.5" fill="#ccc"/>
-        </svg>
-
-        <!-- Row of beat indicator dots -->
-        <div id="beat-lights-row" aria-live="polite" aria-label="Beat indicator"></div>
+          <!-- Row of beat indicator dots -->
+          <div id="beat-lights-row" aria-live="polite" aria-label="Beat indicator"></div>
+        </g>
       </section>
 
       <!-- Transport controls -->
@@ -95,7 +96,7 @@
     </div><!-- /player-panel -->
 
     <!-- ===== RIGHT: Editor Panel ===== -->
-    <div id="editor-panel">
+    <div id="editor-panel" class="editor-hidden" aria-hidden="true">
       <header class="panel-header editor-header">
         <span class="editor-title">Playlist Editor <small>(JSON)</small></span>
         <div class="editor-header-right">
