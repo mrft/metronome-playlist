@@ -19,8 +19,8 @@
  *   isPaused   {boolean}
  */
 
-import { html }    from 'htm/preact';
-import { render }  from 'preact';
+import { html }   from 'htm/preact';
+import { render } from 'preact';
 import {
   useState, useEffect, useRef, useCallback, useMemo,
 } from 'preact/hooks';
@@ -137,14 +137,15 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
       wakeLockRef.current.addEventListener('release', () => {
         wakeLockRef.current = null;
       });
-    } catch (_) {
+    } catch (_err) {
+      // Wake lock request can fail (e.g. power-saving mode, non-secure context); safe to ignore.
       wakeLockRef.current = null;
     }
   }, []);
 
   const releaseWakeLock = useCallback(async () => {
     if (!wakeLockRef.current) return;
-    try { await wakeLockRef.current.release(); } catch (_) {}
+    try { await wakeLockRef.current.release(); } catch (_err) { /* ignore release errors */ }
     wakeLockRef.current = null;
   }, []);
 
@@ -321,7 +322,9 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
     isPlayingRef.current = false;
     isPausedRef.current  = true;
     if (audioCtxRef.current?.state === 'running') {
-      audioCtxRef.current.suspend().catch(() => {});
+      audioCtxRef.current.suspend().catch(() => {
+        // Ignore errors if the AudioContext is already closed or cannot be suspended.
+      });
     }
     setIsPlaying(false);
     setIsPaused(true);

@@ -265,6 +265,14 @@ body.edit-mode .view-only { display: none; }
 /* Override inline-block for the flex meta container */
 body.edit-mode #song-edit-meta { display: flex; }
 
+/* ===== metronome-player custom element ===== */
+/* display:contents makes the element transparent to layout so that the
+   #metronome-visual and #controls sections it renders participate directly
+   in the #player-panel flex column, matching the original structure. */
+metronome-player {
+  display: contents;
+}
+
 /* ===== Visual metronome ===== */
 #metronome-visual {
   flex: 1;

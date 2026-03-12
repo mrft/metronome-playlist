@@ -81,8 +81,13 @@ const PLAYLIST_SCHEMA = {
 let playlist = [];
 let currentSongIndex = 0;
 
+/**
+ * @typedef {{ tempo:number, beats:number, subdivision:number,
+ *             isPlaying:boolean, isPaused:boolean,
+ *             play:()=>void, stop:()=>void, pause:()=>void }} MetronomePlayerElement
+ */
 // DOM element references (populated in init())
-/** @type {HTMLElement & { tempo:number, beats:number, subdivision:number, isPlaying:boolean, isPaused:boolean, play:()=>void, stop:()=>void, pause:()=>void }|null} */
+/** @type {MetronomePlayerElement|null} */
 let elMetronome;
 let elPrevSong, elNextSong, elSongName, elSongMeta, elSongPos, elSongOrder;
 let elEditName, elEditTempo, elEditBeats, elEditSubdivision;
