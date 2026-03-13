@@ -19,11 +19,11 @@
  *   isPaused   {boolean}
  */
 
-import { html }   from 'htm/preact';
-import { render } from 'preact';
+import { html }           from 'htm/preact';
 import {
   useState, useEffect, useRef, useCallback, useMemo,
 } from 'preact/hooks';
+import { preactComponent } from './utils.js';
 
 /* ── Constants ────────────────────────────────────────────────────────── */
 
@@ -491,46 +491,37 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   MetronomePlayerElement — Custom element wrapper
+   MetronomePlayerElement — Custom element wrapper (via preactComponent)
    ══════════════════════════════════════════════════════════════════════ */
 
-class MetronomePlayerElement extends HTMLElement {
-  #tempo       = 100;
-  #beats       = 4;
-  #subdivision = 1;
+// Create the base class (connectedCallback / disconnectedCallback / setProp /
+// _render all provided by the utility) but defer registration so we can
+// subclass before calling customElements.define().
+const _MetronomePlayerBase = preactComponent(MetronomePlayer, { define: false });
+
+class MetronomePlayerElement extends _MetronomePlayerBase {
   /** @type {{ play:()=>void, stop:()=>void, pause:()=>void, isPlaying:boolean, isPaused:boolean }|null} */
-  #api         = null;
+  #api = null;
 
-  connectedCallback() {
-    this.#doRender();
-  }
-
-  disconnectedCallback() {
-    render(null, this);
-  }
-
-  #doRender() {
-    render(
-      html`<${MetronomePlayer}
-        tempo=${this.#tempo}
-        beats=${this.#beats}
-        subdivision=${this.#subdivision}
-        onApiReady=${(api) => { this.#api = api; }}
-      />`,
-      this,
-    );
+  constructor() {
+    super();
+    // Seed default props and wire the API callback once.
+    this._props.tempo       = 100;
+    this._props.beats       = 4;
+    this._props.subdivision = 1;
+    this._props.onApiReady  = (api) => { this.#api = api; };
   }
 
   /* ── Settable properties ────────────────────────────────────────── */
 
-  get tempo()       { return this.#tempo; }
-  set tempo(val)    { this.#tempo = Number(val);       this.#doRender(); }
+  get tempo()          { return this._props.tempo; }
+  set tempo(val)       { this.setProp('tempo', Number(val)); }
 
-  get beats()       { return this.#beats; }
-  set beats(val)    { this.#beats = Number(val);       this.#doRender(); }
+  get beats()          { return this._props.beats; }
+  set beats(val)       { this.setProp('beats', Number(val)); }
 
-  get subdivision() { return this.#subdivision; }
-  set subdivision(val) { this.#subdivision = Number(val); this.#doRender(); }
+  get subdivision()    { return this._props.subdivision; }
+  set subdivision(val) { this.setProp('subdivision', Number(val)); }
 
   /* ── Control methods ────────────────────────────────────────────── */
 
