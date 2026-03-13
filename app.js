@@ -19,6 +19,8 @@
 ───────────────────────────────────────────────────────────────────────── */
 
 const STORAGE_KEY = 'metronome-playlist-v1';
+const RECENT_KEY  = 'metronome-playlist-recent-v1';
+const RECENT_MAX  = 10;
 
 const DEFAULT_PLAYLIST = [
   { name: 'Slow Blues',   tempo: 60,  beats: 4, subdivision: 1 },
@@ -82,6 +84,12 @@ let playlist = [];
 let currentSongIndex = 0;
 
 /**
+ * @typedef {{ name:string, savedAt:string, playlist:Song[] }} RecentEntry
+ */
+/** @type {RecentEntry[]} */
+let recentPlaylists = [];
+
+/**
  * @typedef {{
  *   tempo:number, beats:number, subdivision:number,
  *   playbackState:'playing'|'paused'|'stopped',
@@ -105,6 +113,91 @@ let monacoEditor = null;
 let usingFallbackEditor = false;
 /** Timeout handle used to detect Monaco CDN failure. */
 let monacoLoadTimeout = null;
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Recent-playlists management
+───────────────────────────────────────────────────────────────────────── */
+
+/** Populate `recentPlaylists` from localStorage. */
+function loadRecentPlaylists() {
+  try {
+    const stored = localStorage.getItem(RECENT_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    recentPlaylists = Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    recentPlaylists = [];
+  }
+}
+
+/**
+ * Add or update an entry in the recent-playlists list, capped at RECENT_MAX.
+ * @param {string} name  Display name (e.g. filename)
+ * @param {Song[]} pl    Playlist data to persist
+ */
+function addToRecentPlaylists(name, pl) {
+  recentPlaylists = recentPlaylists.filter(r => r.name !== name);
+  recentPlaylists.unshift({ name, savedAt: new Date().toISOString(), playlist: pl });
+  recentPlaylists = recentPlaylists.slice(0, RECENT_MAX);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recentPlaylists));
+  if (elEditorPanel) elEditorPanel.recentPlaylists = recentPlaylists;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   File save / load
+───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Download the current playlist as a JSON file and add it to the recent list.
+ */
+function savePlaylist() {
+  const datePart = new Date().toISOString().slice(0, 16).replace('T', '-').replace(':', '');
+  const filename  = `playlist-${datePart}.json`;
+  const json      = JSON.stringify(playlist, null, 2);
+  const blob      = new Blob([json], { type: 'application/json' });
+  const url       = URL.createObjectURL(blob);
+  const a         = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  addToRecentPlaylists(filename, playlist);
+}
+
+/**
+ * Parse and apply a playlist file that was opened via the file picker.
+ * @param {{ name:string, content:string }} detail
+ */
+function onLoadFileFromEditor({ name, content }) {
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (e) {
+    setValidation('invalid', `✗ ${e.message}`);
+    return;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    setValidation('invalid', '✗ Must be a non-empty array');
+    return;
+  }
+  if (elMetronome && elMetronome.playbackState !== 'stopped') elMetronome.playbackState = 'stopped';
+  loadPlaylist(parsed);
+  syncEditorFromPlaylist();
+  addToRecentPlaylists(name, playlist);
+}
+
+/**
+ * Re-load a playlist from the recent-playlists list by index.
+ * @param {number} index  Index into `recentPlaylists` array
+ */
+function onLoadRecentFromEditor(index) {
+  const entry = recentPlaylists[index];
+  if (!entry?.playlist) return;
+  if (elMetronome && elMetronome.playbackState !== 'stopped') elMetronome.playbackState = 'stopped';
+  loadPlaylist(entry.playlist);
+  syncEditorFromPlaylist();
+  // Move to top of the recent list
+  addToRecentPlaylists(entry.name, playlist);
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
    Playlist management
@@ -636,8 +729,15 @@ function init() {
   elSongInfo.addEventListener('song-input',    (e) => onSongInputFromComponent(e.detail));
 
   // Editor panel events
-  elEditorPanel.addEventListener('apply', applyPlaylist);
-  elEditorPanel.addEventListener('close', () => setEditorVisible(false));
+  elEditorPanel.addEventListener('apply',         applyPlaylist);
+  elEditorPanel.addEventListener('close',         () => setEditorVisible(false));
+  elEditorPanel.addEventListener('save-playlist', savePlaylist);
+  elEditorPanel.addEventListener('load-file',     (e) => onLoadFileFromEditor(e.detail));
+  elEditorPanel.addEventListener('load-recent',   (e) => onLoadRecentFromEditor(e.detail));
+
+  // Populate recent-playlists from localStorage
+  loadRecentPlaylists();
+  elEditorPanel.recentPlaylists = recentPlaylists;
 
   // Toggle editor button (in the main header — not inside any component)
   elToggleEditorBtn.addEventListener('click', () => setEditorVisible(!elEditorPanel.open));

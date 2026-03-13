@@ -11,10 +11,15 @@
  *   validationMsg   {string}   text shown in the validation indicator
  *   validationState {string}   'valid' | 'invalid' | 'warning' | ''
  *   applyFeedback   {boolean}  when true, Apply button shows "✓ Applied!"
+ *   useFallback     {boolean}  when true, shows textarea instead of Monaco
+ *   recentPlaylists {Array}    list of {name, savedAt, playlist} objects
  *
  * Dispatched events (all bubble):
- *   apply  – user clicked "Apply ↵" (or Ctrl+Enter in app.js)
- *   close  – user clicked "✕"
+ *   apply         – user clicked "Apply ↵"
+ *   close         – user clicked "✕"
+ *   save-playlist – user clicked "💾 Save"
+ *   load-file     – user selected a JSON file  {detail: {name, content}}
+ *   load-recent   – user clicked a recent entry {detail: index}
  *
  * Notes:
  *   The Monaco editor container (#monaco-editor-container) and the fallback
@@ -25,7 +30,19 @@
  */
 
 import { html }           from 'htm/preact';
+import { useRef }         from 'preact/hooks';
 import { preactComponent } from './utils.js';
+
+/* ── Date formatting helper ────────────────────────────────────────── */
+function formatDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+  } catch (_) {
+    return iso;
+  }
+}
 
 /* ══════════════════════════════════════════════════════════════════════
    EditorPanel — Preact functional component
@@ -34,8 +51,12 @@ import { preactComponent } from './utils.js';
 /**
  * @param {{
  *   validationMsg:string, validationState:string,
- *   applyFeedback:boolean,
+ *   applyFeedback:boolean, useFallback:boolean,
+ *   recentPlaylists:Array<{name:string,savedAt:string}>,
  *   onApply:()=>void, onClose:()=>void,
+ *   onSave:()=>void,
+ *   onLoadFile:(d:{name:string,content:string})=>void,
+ *   onLoadRecent:(index:number)=>void,
  * }} props
  */
 function EditorPanel({
@@ -43,9 +64,15 @@ function EditorPanel({
   validationState = '',
   applyFeedback   = false,
   useFallback     = false,
+  recentPlaylists = [],
   onApply,
   onClose,
+  onSave,
+  onLoadFile,
+  onLoadRecent,
 }) {
+  const fileInputRef = useRef(null);
+
   const validationClass =
     'validation-msg' + (validationState ? ' ' + validationState : '');
 
@@ -53,9 +80,29 @@ function EditorPanel({
     ? 'background: var(--success); border-color: var(--success);'
     : '';
 
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      onLoadFile?.({ name: file.name, content: ev.target.result });
+    };
+    reader.readAsText(file);
+    // Reset so the same file can be re-selected without a page reload
+    e.target.value = '';
+  }
+
   return html`
     <header class="panel-header editor-header">
-      <span class="editor-title">Playlist Editor <small>(JSON)</small></span>
+      <div class="editor-header-left">
+        <span class="editor-title">Playlist Editor <small>(JSON)</small></span>
+        <button class="header-btn file-btn" title="Open playlist JSON file"
+          onClick=${() => fileInputRef.current?.click()}>📂 Open</button>
+        <button class="header-btn file-btn" title="Save playlist as JSON file"
+          onClick=${onSave}>💾 Save</button>
+        <input ref=${fileInputRef} type="file" accept=".json"
+          style="display:none" onChange=${handleFileChange} />
+      </div>
       <div class="editor-header-right">
         <span id="validation-msg" class=${validationClass}>${validationMsg}</span>
         <button id="apply-btn" class="ctrl-btn primary"
@@ -72,6 +119,18 @@ function EditorPanel({
     <textarea id="fallback-editor" class="fallback-editor"
               style=${useFallback ? '' : 'display:none'}
               aria-label="Playlist JSON editor (fallback)" spellcheck="false"></textarea>
+    ${recentPlaylists.length > 0 ? html`
+      <div id="recent-playlists" aria-label="Recent playlists">
+        <span class="recent-label">📋 Recent</span>
+        ${recentPlaylists.map((r, i) => html`
+          <button key=${r.savedAt + i} class="recent-item"
+            title="Load: ${r.name}" onClick=${() => onLoadRecent?.(i)}>
+            <span class="recent-name">${r.name}</span>
+            <span class="recent-date">${formatDate(r.savedAt)}</span>
+          </button>
+        `)}
+      </div>
+    ` : null}
     <div id="schema-hint">
       💡 Required: <strong>name</strong> (string) · <strong>tempo</strong> (20–400 BPM) · <strong>beats</strong> (integer).
       Optional: <strong>subdivision</strong> (1–8, default&nbsp;1).
@@ -94,8 +153,12 @@ class EditorPanelElement extends _EditorPanelBase {
       validationState: '',
       applyFeedback:   false,
       useFallback:     false,
-      onApply: () => this.dispatchEvent(new CustomEvent('apply', { bubbles: true })),
-      onClose: () => this.dispatchEvent(new CustomEvent('close', { bubbles: true })),
+      recentPlaylists: [],
+      onApply:      () => this.dispatchEvent(new CustomEvent('apply',         { bubbles: true })),
+      onClose:      () => this.dispatchEvent(new CustomEvent('close',         { bubbles: true })),
+      onSave:       () => this.dispatchEvent(new CustomEvent('save-playlist', { bubbles: true })),
+      onLoadFile:   (d) => this.dispatchEvent(new CustomEvent('load-file',    { bubbles: true, detail: d })),
+      onLoadRecent: (i) => this.dispatchEvent(new CustomEvent('load-recent',  { bubbles: true, detail: i })),
     });
   }
 
@@ -124,6 +187,9 @@ class EditorPanelElement extends _EditorPanelBase {
 
   get useFallback()        { return this._props.useFallback; }
   set useFallback(val)     { this.setProp('useFallback',     Boolean(val)); }
+
+  get recentPlaylists()    { return this._props.recentPlaylists; }
+  set recentPlaylists(val) { this.setProp('recentPlaylists', Array.isArray(val) ? val : []); }
 }
 
 customElements.define('editor-panel', EditorPanelElement);

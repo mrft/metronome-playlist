@@ -94,6 +94,7 @@ html, body {
 .editor-header .editor-title {
   font-size: 0.9rem;
   color: var(--text2);
+  white-space: nowrap;
 }
 
 .editor-header .editor-title small {
@@ -101,10 +102,20 @@ html, body {
   opacity: 0.7;
 }
 
+/* Left group in the editor header: title + file buttons */
+.editor-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .editor-header-right {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 /* ===== Header utility buttons ===== */
@@ -127,6 +138,12 @@ html, body {
 .header-btn[aria-pressed="true"]:hover {
   background: var(--accent-glow);
   border-color: var(--accent-glow);
+}
+
+/* File Open / Save buttons — slightly more compact than generic header-btn */
+.file-btn {
+  padding: 4px 9px;
+  font-size: 0.8rem;
 }
 
 /* ===== Song info section ===== */
@@ -375,6 +392,61 @@ metronome-player {
 .validation-msg.warning { color: var(--warning); }
 
 /* Schema hint footer inside the editor panel */
+/* ===== Recent playlists strip ===== */
+#recent-playlists {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.recent-label {
+  font-size: 0.75rem;
+  color: var(--text2);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.recent-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+  text-align: left;
+}
+.recent-item:hover {
+  background: #30306a;
+  border-color: var(--accent);
+}
+
+.recent-name {
+  font-size: 0.78rem;
+  color: var(--text);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-date {
+  font-size: 0.68rem;
+  color: var(--text2);
+  margin-top: 1px;
+}
+
 #schema-hint {
   padding: 8px 14px;
   background: var(--bg);
