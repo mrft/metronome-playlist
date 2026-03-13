@@ -91,6 +91,8 @@ html, body {
   white-space: nowrap;
 }
 
+.editor-header { flex-wrap: wrap; }
+
 .editor-header .editor-title {
   font-size: 0.9rem;
   color: var(--text2);
@@ -102,13 +104,21 @@ html, body {
   opacity: 0.7;
 }
 
-/* Left group in the editor header: title + file buttons */
+/* Left group in the editor header: title */
 .editor-header-left {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
   overflow: hidden;
+}
+
+/* File buttons group — sits between title and controls */
+.editor-file-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .editor-header-right {
@@ -527,5 +537,13 @@ metronome-player {
     overflow: hidden;
     height: 100vh;
     height: 100dvh;
+  }
+
+  /* On narrow screens, promote the file buttons to their own row above the
+     editor title so they are always visible and not clipped by the right group. */
+  .editor-file-btns {
+    order: -1;
+    width: 100%;
+    padding-bottom: 4px;
   }
 }

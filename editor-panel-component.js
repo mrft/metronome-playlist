@@ -96,6 +96,8 @@ function EditorPanel({
     <header class="panel-header editor-header">
       <div class="editor-header-left">
         <span class="editor-title">Playlist Editor <small>(JSON)</small></span>
+      </div>
+      <div class="editor-file-btns">
         <button class="header-btn file-btn" title="Open playlist JSON file"
           onClick=${() => fileInputRef.current?.click()}>📂 Open</button>
         <button class="header-btn file-btn" title="Save playlist as JSON file"
