@@ -208,11 +208,6 @@ html, body {
 
 /* ===== Edit-mode inline fields ===== */
 
-/* Edit-only elements are hidden by default; shown when body has edit-mode class */
-.edit-only { display: none; }
-body.edit-mode .edit-only { display: inline-block; }
-body.edit-mode .view-only { display: none; }
-
 /* Editable text/number fields */
 .edit-field {
   background: var(--bg3);
@@ -242,6 +237,7 @@ body.edit-mode .view-only { display: none; }
 
 /* Editable meta row (BPM / Beats / Subdiv) */
 #song-edit-meta {
+  display: flex;
   gap: 10px;
   justify-content: center;
   flex-wrap: wrap;
@@ -262,8 +258,13 @@ body.edit-mode .view-only { display: none; }
   text-align: center;
 }
 
-/* Override inline-block for the flex meta container */
-body.edit-mode #song-edit-meta { display: flex; }
+/* ===== song-info / editor-panel custom elements ===== */
+/* Ensure block layout so they participate in flex columns like their
+   predecessors (<section> and <div>). Styles targeting their inner IDs
+   (#song-info, #editor-panel, etc.) continue to work as-is because the
+   components render into the light DOM, not a shadow root. */
+song-info    { display: block; }
+editor-panel { display: flex; flex-direction: column; }
 
 /* ===== metronome-player custom element ===== */
 /* display:contents makes the element transparent to layout so that the

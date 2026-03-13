@@ -5,11 +5,14 @@
  * Exposed as <metronome-player>.
  *
  * Settable properties (no HTML attributes required):
- *   tempo       {number}  beats per minute (20–400)
- *   beats       {number}  beats per measure (1–32)
- *   subdivision {number}  subdivision per beat (1–8, default 1)
+ *   tempo         {number}  beats per minute (20–400)
+ *   beats         {number}  beats per measure (1–32)
+ *   subdivision   {number}  subdivision per beat (1–8, default 1)
+ *   playbackState {'playing'|'paused'|'stopped'}
+ *                           set to drive playback declaratively;
+ *                           read to get the current state
  *
- * Methods:
+ * Methods (kept for convenience; prefer playbackState setter):
  *   play()   – start or restart playback
  *   pause()  – pause playback
  *   stop()   – stop and reset visuals
@@ -528,6 +531,22 @@ class MetronomePlayerElement extends _MetronomePlayerBase {
   play()  { this.#api?.play(); }
   pause() { this.#api?.pause(); }
   stop()  { this.#api?.stop(); }
+
+  /* ── Declarative playback state ─────────────────────────────────── */
+
+  /** @returns {'playing'|'paused'|'stopped'} */
+  get playbackState() {
+    if (this.#api?.isPlaying) return 'playing';
+    if (this.#api?.isPaused)  return 'paused';
+    return 'stopped';
+  }
+
+  /** @param {'playing'|'paused'|'stopped'} val */
+  set playbackState(val) {
+    if      (val === 'playing') this.play();
+    else if (val === 'paused')  this.pause();
+    else                        this.stop();
+  }
 
   /* ── Read-only state ────────────────────────────────────────────── */
 

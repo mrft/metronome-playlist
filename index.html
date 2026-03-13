@@ -27,60 +27,21 @@
       </header>
 
       <!-- Current song info + prev/next -->
-      <section id="song-info">
-        <div id="song-name-row">
-          <span id="song-order" class="song-order"></span>
-          <span id="song-name" class="view-only">No playlist loaded</span>
-          <input id="edit-name" class="edit-field edit-only" type="text" aria-label="Song name" />
-          <button id="delete-song-btn" class="nav-btn delete-btn edit-only" title="Delete current song" aria-label="Delete current song">🗑</button>
-        </div>
-        <!-- Static meta (view mode) -->
-        <div id="song-meta" class="view-only"></div>
-        <!-- Editable meta fields (edit mode only) -->
-        <div id="song-edit-meta" class="edit-only">
-          <label class="edit-label">BPM<input id="edit-tempo" class="edit-field" type="number" min="20" max="400" step="1" aria-label="Tempo (BPM)" /></label>
-          <label class="edit-label">Beats<input id="edit-beats" class="edit-field" type="number" min="1" max="32" step="1" aria-label="Beats per bar" /></label>
-          <label class="edit-label">Subdiv<input id="edit-subdivision" class="edit-field" type="number" min="1" max="8" step="1" aria-label="Subdivision" /></label>
-        </div>
-        <div id="song-nav">
-          <button id="insert-before-btn" class="nav-btn edit-only" title="Insert new song before current" aria-label="Insert song before">+</button>
-          <button id="move-up-btn" class="nav-btn edit-only" title="Move song up in playlist" aria-label="Move song up">↑</button>
-          <button id="prev-song-btn" class="nav-btn" title="Previous song" aria-label="Previous song">&#9664;</button>
-          <span id="song-position"></span>
-          <button id="next-song-btn" class="nav-btn" title="Next song" aria-label="Next song">&#9654;</button>
-          <button id="move-down-btn" class="nav-btn edit-only" title="Move song down in playlist" aria-label="Move song down">↓</button>
-          <button id="insert-after-btn" class="nav-btn edit-only" title="Insert new song after current" aria-label="Insert song after">+</button>
-        </div>
-      </section>
+      <song-info id="song-info"></song-info>
 
       <!-- Visual metronome + transport controls (managed by <metronome-player>) -->
       <metronome-player id="metronome-player"></metronome-player>
     </div><!-- /player-panel -->
 
     <!-- ===== RIGHT: Editor Panel ===== -->
-    <div id="editor-panel" class="editor-hidden" aria-hidden="true">
-      <header class="panel-header editor-header">
-        <span class="editor-title">Playlist Editor <small>(JSON)</small></span>
-        <div class="editor-header-right">
-          <span id="validation-msg" class="validation-msg"></span>
-          <button id="apply-btn" class="ctrl-btn primary" title="Apply playlist (Ctrl+Enter)">Apply ↵</button>
-          <button id="close-editor-btn" class="header-btn" title="Close editor">✕</button>
-        </div>
-      </header>
-      <div id="monaco-editor-container"></div>
-      <!-- Textarea fallback shown if Monaco CDN is unavailable -->
-      <textarea id="fallback-editor" class="fallback-editor" style="display:none"
-                aria-label="Playlist JSON editor (fallback)" spellcheck="false"></textarea>
-      <!-- Schema reference footer (always visible) -->
-      <div id="schema-hint">
-        💡 Required: <strong>name</strong> (string) · <strong>tempo</strong> (20–400 BPM) · <strong>beats</strong> (integer).
-        Optional: <strong>subdivision</strong> (1–8, default&nbsp;1).
-        Press <kbd>Ctrl+Enter</kbd> to apply.
-      </div>
-    </div><!-- /editor-panel -->
+    <editor-panel id="editor-panel"></editor-panel><!-- /editor-panel -->
 
   </div><!-- /app -->
 
+  <!-- Song info component (ES module — must load before app.js) -->
+  <script type="module" src="song-info-component.js"></script>
+  <!-- Editor panel component (ES module — must load before app.js) -->
+  <script type="module" src="editor-panel-component.js"></script>
   <!-- Metronome component (ES module — must load before app.js) -->
   <script type="module" src="metronome-component.js"></script>
   <!-- Monaco Editor loader from CDN -->
