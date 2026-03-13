@@ -474,7 +474,7 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
         title="Stop" aria-label="Stop"
         disabled=${!isPlaying && !isPaused}
         onClick=${stopEngine}
-      >&#9632; Stop</button>
+      >⏹ Stop</button>
 
       <span class="ctrl-sep"></span>
 
