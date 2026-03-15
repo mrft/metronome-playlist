@@ -79,7 +79,6 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
 
   /* ── DOM refs (direct manipulation for animation performance) ─────── */
   const pendulumGroupRef     = useRef(null);
-  const bobRef               = useRef(null);
   const weightRef            = useRef(null);
   const beatTextRef          = useRef(null);
   const beatDotsContainerRef = useRef(null);
@@ -168,40 +167,25 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
     }
   }, []);
 
-  const pulseBob = useCallback((isAccent, isSubdiv) => {
-    const bob = bobRef.current;
-    if (!bob) return;
-    if (isSubdiv) {
-      bob.style.fill = '#78c8ff';
-      setTimeout(() => {
-        if (bobRef.current) bobRef.current.style.fill = 'var(--bob-idle, #4a9eff)';
-      }, 60);
-    } else {
-      const color = isAccent ? 'var(--bob-accent, #ff5744)' : 'var(--bob-beat, #ffe44a)';
-      const glow  = isAccent ? '#ff5744' : '#ffe44a';
-      bob.style.fill   = color;
-      bob.style.filter = `drop-shadow(0 0 8px ${glow})`;
-      setTimeout(() => {
-        if (!bobRef.current) return;
-        bobRef.current.style.fill   = 'var(--bob-idle, #4a9eff)';
-        bobRef.current.style.filter = '';
-      }, FLASH_MS);
-    }
-  }, []);
-
   const triggerBeatFlash = useCallback((beat, isAccent) => {
     if (beatTextRef.current) {
       beatTextRef.current.textContent = String(beat + 1);
     }
     beatDotRefsRef.current.forEach((dot, i) => {
-      dot.classList.remove('lit-beat', 'lit-accent');
+      dot.classList.remove('lit-beat', 'lit-accent', 'lit-subdiv');
       if (i === beat) {
         dot.classList.add(isAccent ? 'lit-accent' : 'lit-beat');
         setTimeout(() => dot.classList.remove('lit-beat', 'lit-accent'), FLASH_MS);
       }
     });
-    pulseBob(isAccent, false);
-  }, [pulseBob]);
+  }, []);
+
+  const triggerSubdivFlash = useCallback((beat) => {
+    const dot = beatDotRefsRef.current[beat];
+    if (!dot) return;
+    dot.classList.add('lit-subdiv');
+    setTimeout(() => dot.classList.remove('lit-subdiv'), FLASH_MS);
+  }, []);
 
   const resetVisualsDOM = useCallback(() => {
     if (pendulumGroupRef.current) {
@@ -210,11 +194,7 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
     if (beatTextRef.current) {
       beatTextRef.current.textContent = '—';
     }
-    beatDotRefsRef.current.forEach(d => d.classList.remove('lit-beat', 'lit-accent'));
-    if (bobRef.current) {
-      bobRef.current.style.fill   = '';
-      bobRef.current.style.filter = '';
-    }
+    beatDotRefsRef.current.forEach(d => d.classList.remove('lit-beat', 'lit-accent', 'lit-subdiv'));
   }, []);
 
   const positionWeightDOM = useCallback((t) => {
@@ -272,9 +252,10 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
     const ctx = audioCtxRef.current;
     const now = ctx.currentTime;
 
-    // Pendulum swing (cosine oscillation peaking at beat boundaries)
+    // Pendulum swing: sine oscillation — angle is 0 (bottom) at every beat boundary,
+    // swings to right on odd intervals and left on even intervals.
     const elapsed = now - playStartTimeRef.current;
-    const angle   = MAX_ANGLE * Math.cos(Math.PI * (elapsed / beatDurRef.current));
+    const angle   = MAX_ANGLE * Math.sin(Math.PI * (elapsed / beatDurRef.current));
     if (pendulumGroupRef.current) {
       pendulumGroupRef.current.setAttribute('transform', `rotate(${angle}, 100, 197)`);
     }
@@ -287,7 +268,7 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
       if (!evt.isSubdiv) {
         triggerBeatFlash(evt.beat, evt.beat === 0);
       } else {
-        pulseBob(false, true);
+        triggerSubdivFlash(evt.beat);
       }
     }
     visualQueueHeadRef.current = head;
@@ -297,7 +278,7 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
     }
 
     animFrameRef.current = requestAnimationFrame(animationLoop);
-  }, [triggerBeatFlash, pulseBob]);
+  }, [triggerBeatFlash, triggerSubdivFlash]);
 
   /* ── Playback control (all read from refs → stable callbacks) ─────── */
 
@@ -447,7 +428,7 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
             <!-- Tempo weight -->
             <rect ref=${weightRef} x="93" y="132" width="14" height="11" rx="3" fill="#6060c0"/>
             <!-- Bob -->
-            <circle ref=${bobRef} cx="100" cy="283" r="11" fill="#4a9eff"/>
+            <circle cx="100" cy="283" r="11" fill="#4a9eff"/>
           </g>
 
           <!-- Pivot pin (drawn last so it sits on top of the rod) -->

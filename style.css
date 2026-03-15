@@ -14,9 +14,6 @@
   --success:    #4caf50;
   --error:      #f44336;
   --warning:    #ff9800;
-  --bob-idle:   #4a9eff;
-  --bob-beat:   #ffe44a;
-  --bob-accent: #ff5744;
 }
 
 /* ===== Reset / base ===== */
@@ -350,6 +347,12 @@ metronome-player {
   background: var(--accent2);
   border-color: var(--accent2);
   box-shadow: 0 0 12px var(--accent2);
+}
+
+.beat-dot.lit-subdiv {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
 }
 
 /* ===== Transport controls ===== */
