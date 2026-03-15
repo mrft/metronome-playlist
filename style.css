@@ -226,6 +226,10 @@ html, body {
 }
 .nav-btn.delete-btn:hover:not(:disabled) { background: rgba(255, 87, 68, 0.15); }
 
+.nav-btn.playmode-btn {
+  font-size: 1.5rem;
+}
+
 #song-position {
   font-size: 0.82rem;
   color: var(--text2);

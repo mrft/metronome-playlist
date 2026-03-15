@@ -207,11 +207,11 @@ function SongInfo({
           title="Move song up in playlist" aria-label="Move song up"
           disabled=${!canMoveUp} onClick=${onMoveUp}>↑</button>
       ` : null}
-      <button id="prev-song-btn" class="nav-btn"
+      <button id="prev-song-btn" class="nav-btn playmode-btn"
         title="Previous song" aria-label="Previous song"
         disabled=${!hasPrev} onClick=${onPrev}>◀</button>
       <span id="song-position">${position}</span>
-      <button id="next-song-btn" class="nav-btn"
+      <button id="next-song-btn" class="nav-btn playmode-btn"
         title="Next song" aria-label="Next song"
         disabled=${!hasNext} onClick=${onNext}>▶</button>
       ${isEdit ? html`
