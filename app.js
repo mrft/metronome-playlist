@@ -136,7 +136,8 @@ function loadRecentPlaylists() {
  */
 function addToRecentPlaylists(name, pl) {
   recentPlaylists = recentPlaylists.filter(r => r.name !== name);
-  recentPlaylists.unshift({ name, savedAt: new Date().toISOString(), playlist: pl });
+  // Store a deep copy so later mutations to the live playlist don't corrupt the snapshot.
+  recentPlaylists.unshift({ name, savedAt: new Date().toISOString(), playlist: JSON.parse(JSON.stringify(pl)) });
   recentPlaylists = recentPlaylists.slice(0, RECENT_MAX);
   localStorage.setItem(RECENT_KEY, JSON.stringify(recentPlaylists));
   if (elEditorPanel) elEditorPanel.recentPlaylists = recentPlaylists;
@@ -159,7 +160,8 @@ function savePlaylist() {
   a.href     = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoke after a short delay so the browser has time to initiate the download.
+  setTimeout(() => URL.revokeObjectURL(url), 100);
   addToRecentPlaylists(filename, playlist);
 }
 

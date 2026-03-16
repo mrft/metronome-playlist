@@ -315,11 +315,25 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
   }, []);
 
   const startEngine = useCallback(() => {
+    // No-op if already playing — prevents duplicate scheduler/RAF loops.
+    if (isPlayingRef.current) return;
+
+    // Validate inputs before starting to avoid NaN durations and broken visuals.
+    const t = tempoRef.current;
+    const b = beatsRef.current;
+    const s = subdivRef.current || 1;
+    if (!Number.isFinite(t) || t < 20 || t > 400 ||
+        !Number.isFinite(b) || b < 1  || b > 32  ||
+        !Number.isFinite(s) || s < 1  || s > 8) {
+      console.warn('[metronome] startEngine: invalid parameters', { tempo: t, beats: b, subdivision: s });
+      return;
+    }
+
     ensureAudioContext();
     const ctx = audioCtxRef.current;
     currentBeatRef.current     = 0;
     currentSubdivRef.current   = 0;
-    beatDurRef.current         = 60 / tempoRef.current;
+    beatDurRef.current         = 60 / t;
     nextBeatTimeRef.current    = ctx.currentTime + 0.05;
     playStartTimeRef.current   = nextBeatTimeRef.current;
     visualQueueRef.current     = [];
@@ -328,8 +342,8 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
     isPausedRef.current        = false;
     pausedByVisibilityRef.current = false;
 
-    renderBeatDotsDOM(beatsRef.current);
-    positionWeightDOM(tempoRef.current);
+    renderBeatDotsDOM(b);
+    positionWeightDOM(t);
 
     schedulerTimerRef.current = setInterval(scheduleBeats, SCHEDULE_INTERVAL_MS);
     animFrameRef.current      = requestAnimationFrame(animationLoop);

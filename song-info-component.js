@@ -140,7 +140,11 @@ function SongInfo({
         <input id="edit-name" class="edit-field" type="text"
           value=${editName} disabled=${!hasData}
           aria-label="Song name"
-          onInput=${(e) => setEditName(e.target.value)}
+          onInput=${(e) => {
+            const v = e.target.value;
+            setEditName(v);
+            handleInput(v, editTempo, editBeats, editSubdivision);
+          }}
           onBlur=${handleBlur}
         />
         <button id="delete-song-btn" class="nav-btn delete-btn"
