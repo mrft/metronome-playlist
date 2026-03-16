@@ -1,15 +1,15 @@
 /**
  * Metronome Playlist — app.js
  *
+ * Handles playlist management, song navigation, and the Monaco JSON editor.
+ * The metronome engine, visuals, and transport controls live in the
+ * <metronome-player> custom element (metronome-component.js).
+ *
  * Features:
  *  - Monaco Editor with JSON Schema validation and code-completion hints
- *  - Web Audio API metronome engine (lookahead scheduler for accurate timing)
- *  - SVG pendulum animation synchronized to tempo
- *  - Beat-light indicators (accent on beat 1)
- *  - Play / Pause / Stop controls
- *  - Sound on/off toggle
- *  - Prev/Next song navigation
  *  - Playlist persisted in localStorage
+ *  - Prev/Next song navigation
+ *  - Inline edit mode (name, tempo, beats, subdivision)
  */
 
 'use strict';
@@ -19,24 +19,8 @@
 ───────────────────────────────────────────────────────────────────────── */
 
 const STORAGE_KEY = 'metronome-playlist-v1';
-
-/** Lookahead window for the Web Audio scheduler (seconds). */
-const LOOKAHEAD_TIME = 0.12;
-
-/** How often the scheduler tick fires (ms). */
-const SCHEDULE_INTERVAL_MS = 25;
-
-/** Max pendulum swing angle in degrees. */
-const MAX_ANGLE = 28;
-
-/** Flash duration for beat lights / bob (ms). */
-const FLASH_MS = 140;
-
-/**
- * How many consumed entries to accumulate in visualQueue before trimming them.
- * Keeps memory bounded while avoiding per-frame allocations (shift() is O(n)).
- */
-const VISUAL_QUEUE_TRIM_THRESHOLD = 32;
+const RECENT_KEY  = 'metronome-playlist-recent-v1';
+const RECENT_MAX  = 10;
 
 const DEFAULT_PLAYLIST = [
   { name: 'Slow Blues',   tempo: 60,  beats: 4, subdivision: 1 },
@@ -99,46 +83,29 @@ const PLAYLIST_SCHEMA = {
 let playlist = [];
 let currentSongIndex = 0;
 
-let isPlaying = false;
-let isPaused  = false;
-/** True when the metronome was auto-paused because the page became hidden. */
-let pausedByVisibility = false;
-let soundEnabled = true;
+/**
+ * @typedef {{ name:string, savedAt:string, playlist:Song[] }} RecentEntry
+ */
+/** @type {RecentEntry[]} */
+let recentPlaylists = [];
 
-// Metronome engine state
-/** @type {AudioContext|null} */
-let audioCtx = null;
-
-let schedulerTimer = null;
-let nextBeatTime = 0;        // audioCtx.currentTime of the next event to schedule
-let currentBeat = 0;         // beat within the measure [0, beats)
-let currentSubdiv = 0;       // subdivision step within the beat [0, subdivision)
-
-// Visual sync state
-let playStartAudioTime = 0;  // audioCtx.currentTime of beat 0 of measure 0
-let beatDurSeconds = 0;      // duration of one main beat (seconds)
-
-/** @type {Array<{audioTime:number, beat:number, isSubdiv:boolean}>} */
-let visualQueue = [];
-let visualQueueHead = 0;
-
-let animationFrameId = null;
-
-// Screen Wake Lock
-/** @type {WakeLockSentinel|null} */
-let wakeLockSentinel = null;
-
+/**
+ * @typedef {{
+ *   tempo:number, beats:number, subdivision:number,
+ *   playbackState:'playing'|'paused'|'stopped',
+ *   isPlaying:boolean, isPaused:boolean,
+ *   play:()=>void, stop:()=>void, pause:()=>void,
+ * }} MetronomePlayerElement
+ */
 // DOM element references (populated in init())
-let elPlayBtn, elStopBtn, elSoundBtn;
-let elPrevSong, elNextSong, elSongName, elSongMeta, elSongPos, elSongOrder;
-let elEditName, elEditTempo, elEditBeats, elEditSubdivision;
-let elMoveUpBtn, elMoveDownBtn, elInsertBeforeBtn, elInsertAfterBtn, elDeleteSongBtn;
-let elPendulum, elPendulumBob, elWeightRect, elBeatText;
-let elBeatLightsRow;
-let elValidationMsg, elApplyBtn, elToggleEditorBtn, elCloseEditorBtn, elEditorPanel;
-
-/** References to beat-light dot elements for the current song. */
-let beatDots = [];
+/** @type {MetronomePlayerElement|null} */
+let elMetronome;
+/** @type {HTMLElement|null} Song-info custom element */
+let elSongInfo;
+/** @type {HTMLElement|null} Editor-panel custom element */
+let elEditorPanel;
+/** @type {HTMLElement|null} Toggle editor button (lives in the main header) */
+let elToggleEditorBtn;
 
 /** @type {import('monaco-editor').editor.IStandaloneCodeEditor|null} */
 let monacoEditor = null;
@@ -148,336 +115,90 @@ let usingFallbackEditor = false;
 let monacoLoadTimeout = null;
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Web Audio helpers
+   Recent-playlists management
 ───────────────────────────────────────────────────────────────────────── */
 
-function ensureAudioContext() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
-}
-
-/**
- * Schedule a short click at the given audioCtx time.
- * @param {number} time  - audioCtx scheduled time
- * @param {'accent'|'beat'|'subdiv'} type
- */
-function scheduleClick(time, type) {
-  if (!soundEnabled || !audioCtx) return;
-
-  const gainNode = audioCtx.createGain();
-  gainNode.connect(audioCtx.destination);
-
-  const osc = audioCtx.createOscillator();
-  osc.connect(gainNode);
-  osc.type = 'triangle';
-
-  let freq, peakGain, releaseSec;
-  if (type === 'accent') {
-    freq = 1400; peakGain = 0.9; releaseSec = 0.05;
-  } else if (type === 'beat') {
-    freq = 880;  peakGain = 0.65; releaseSec = 0.04;
-  } else {
-    freq = 580;  peakGain = 0.25; releaseSec = 0.025;
-  }
-
-  osc.frequency.setValueAtTime(freq, time);
-  gainNode.gain.setValueAtTime(0, time);
-  gainNode.gain.linearRampToValueAtTime(peakGain, time + 0.003);
-  gainNode.gain.exponentialRampToValueAtTime(0.001, time + releaseSec);
-
-  osc.start(time);
-  osc.stop(time + releaseSec + 0.01);
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
-   Metronome scheduler
-───────────────────────────────────────────────────────────────────────── */
-
-function scheduleBeats() {
-  const song = playlist[currentSongIndex];
-  if (!song) return;
-
-  const beatDur  = 60 / song.tempo;
-  const subdivDur = beatDur / (song.subdivision || 1);
-
-  while (nextBeatTime < audioCtx.currentTime + LOOKAHEAD_TIME) {
-    const isBeatStart   = currentSubdiv === 0;
-    const isAccentBeat  = isBeatStart && currentBeat === 0;
-
-    if (isBeatStart) {
-      scheduleClick(nextBeatTime, isAccentBeat ? 'accent' : 'beat');
-    } else {
-      scheduleClick(nextBeatTime, 'subdiv');
-    }
-
-    // Queue a visual event keyed to this audioCtx time
-    visualQueue.push({
-      audioTime: nextBeatTime,
-      beat:      currentBeat,
-      isSubdiv:  !isBeatStart,
-    });
-
-    // Advance state
-    currentSubdiv++;
-    if (currentSubdiv >= (song.subdivision || 1)) {
-      currentSubdiv = 0;
-      currentBeat++;
-      if (currentBeat >= song.beats) {
-        currentBeat = 0;
-      }
-    }
-    nextBeatTime += subdivDur;
-  }
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
-   Animation loop (pendulum + visual beat processing)
-───────────────────────────────────────────────────────────────────────── */
-
-function animationLoop() {
-  if (!isPlaying || !audioCtx) return;
-
-  const song = playlist[currentSongIndex];
-  if (!song) return;
-
-  const now = audioCtx.currentTime;
-
-  // ── Pendulum position ──────────────────────────────────────────────────
-  // The pendulum reaches an extreme every beat.
-  // cos(π · elapsed/beatDur):  at t=0 → +1, at t=beatDur → −1, at t=2·beatDur → +1
-  const elapsed = now - playStartAudioTime;
-  const angle = MAX_ANGLE * Math.cos(Math.PI * (elapsed / beatDurSeconds));
-  elPendulum.setAttribute('transform', `rotate(${angle}, 100, 197)`);
-
-  // ── Process visual queue ───────────────────────────────────────────────
-  // A small tolerance (one animation frame ≈ 16 ms) so we don't miss flashes
-  while (visualQueueHead < visualQueue.length &&
-         visualQueue[visualQueueHead].audioTime <= now + 0.018) {
-    const evt = visualQueue[visualQueueHead++];
-    if (!evt.isSubdiv) {
-      triggerBeatFlash(evt.beat, evt.beat === 0);
-    }
-    // Subdivision ticks: only a subtle bob pulse (no light change)
-    if (evt.isSubdiv) {
-      pulseBob(false, true);
-    }
-  }
-  // Trim the consumed prefix periodically to prevent unbounded memory growth
-  if (visualQueueHead >= VISUAL_QUEUE_TRIM_THRESHOLD) {
-    visualQueue.splice(0, visualQueueHead);
-    visualQueueHead = 0;
-  }
-
-  animationFrameId = requestAnimationFrame(animationLoop);
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
-   Visual helpers
-───────────────────────────────────────────────────────────────────────── */
-
-/**
- * Flash a beat-light dot and the pendulum bob.
- * @param {number}  beatIndex  - 0-based beat index
- * @param {boolean} isAccent   - true for beat 1 (index 0)
- */
-function triggerBeatFlash(beatIndex, isAccent) {
-  // Update beat counter text
-  elBeatText.textContent = String(beatIndex + 1);
-
-  // Light up the correct dot
-  beatDots.forEach((dot, i) => {
-    dot.classList.remove('lit-beat', 'lit-accent');
-    if (i === beatIndex) {
-      dot.classList.add(isAccent ? 'lit-accent' : 'lit-beat');
-      setTimeout(() => dot.classList.remove('lit-beat', 'lit-accent'), FLASH_MS);
-    }
-  });
-
-  // Flash the bob
-  pulseBob(isAccent, false);
-}
-
-/**
- * Briefly change the pendulum-bob colour.
- * @param {boolean} isAccent
- * @param {boolean} isSubdiv
- */
-function pulseBob(isAccent, isSubdiv) {
-  if (isSubdiv) {
-    // Very subtle subdivision pulse
-    elPendulumBob.style.fill = '#78c8ff';
-    setTimeout(() => { elPendulumBob.style.fill = 'var(--bob-idle, #4a9eff)'; }, 60);
-  } else {
-    const color = isAccent ? 'var(--bob-accent, #ff5744)' : 'var(--bob-beat, #ffe44a)';
-    const glow  = isAccent ? '#ff5744' : '#ffe44a';
-    elPendulumBob.style.fill = color;
-    elPendulumBob.style.filter = `drop-shadow(0 0 8px ${glow})`;
-    setTimeout(() => {
-      elPendulumBob.style.fill   = 'var(--bob-idle, #4a9eff)';
-      elPendulumBob.style.filter = '';
-    }, FLASH_MS);
-  }
-}
-
-/** Re-render beat-light dots to match the current song's beat count. */
-function renderBeatDots(numBeats) {
-  elBeatLightsRow.innerHTML = '';
-  beatDots = [];
-  for (let i = 0; i < numBeats; i++) {
-    const dot = document.createElement('div');
-    dot.className = 'beat-dot';
-    dot.title = `Beat ${i + 1}`;
-    elBeatLightsRow.appendChild(dot);
-    beatDots.push(dot);
-  }
-}
-
-/** Reset the pendulum to centre and clear all lights. */
-function resetVisuals() {
-  elPendulum.setAttribute('transform', 'rotate(0, 100, 197)');
-  elBeatText.textContent = '—';
-  beatDots.forEach(d => d.classList.remove('lit-beat', 'lit-accent'));
-  elPendulumBob.style.fill   = '';
-  elPendulumBob.style.filter = '';
-}
-
-/** Position the weight-rect on the rod to reflect the current tempo. */
-function positionWeightForTempo(tempo) {
-  // Map 20 BPM → y=90 (high on rod, slower) … 400 BPM → y=175 (low on rod, faster)
-  // In SVG y increases downward, so a smaller y is physically higher.
-  const minY = 90, maxY = 175;
-  const y = minY + ((tempo - 20) / (400 - 20)) * (maxY - minY);
-  elWeightRect.setAttribute('y', y.toFixed(1));
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
-   Metronome playback control
-───────────────────────────────────────────────────────────────────────── */
-
-/* ── Screen Wake Lock helpers ─────────────────────────────────────────── */
-
-/**
- * Request a screen wake lock, storing the sentinel so we can release it
- * later.  Silently ignored when the Wake Lock API is not available.
- */
-async function acquireWakeLock() {
-  if (!('wakeLock' in navigator)) return;
+/** Populate `recentPlaylists` from localStorage. */
+function loadRecentPlaylists() {
   try {
-    wakeLockSentinel = await navigator.wakeLock.request('screen');
-    // Clear our reference when the browser releases the lock automatically
-    // (e.g., the tab was hidden).  The visibilitychange handler will
-    // re-acquire it once the tab is visible again, if still needed.
-    wakeLockSentinel.addEventListener('release', () => {
-      wakeLockSentinel = null;
-    });
+    const stored = localStorage.getItem(RECENT_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    recentPlaylists = Array.isArray(parsed) ? parsed : [];
   } catch (_) {
-    // Wake lock request can fail (e.g., power-saving mode); safe to ignore.
-    wakeLockSentinel = null;
+    recentPlaylists = [];
   }
 }
 
 /**
- * Release the screen wake lock if one is currently held.
+ * Add or update an entry in the recent-playlists list, capped at RECENT_MAX.
+ * @param {string} name  Display name (e.g. filename)
+ * @param {Song[]} pl    Playlist data to persist
  */
-async function releaseWakeLock() {
-  if (!wakeLockSentinel) return;
+function addToRecentPlaylists(name, pl) {
+  recentPlaylists = recentPlaylists.filter(r => r.name !== name);
+  // Store a deep copy so later mutations to the live playlist don't corrupt the snapshot.
+  recentPlaylists.unshift({ name, savedAt: new Date().toISOString(), playlist: JSON.parse(JSON.stringify(pl)) });
+  recentPlaylists = recentPlaylists.slice(0, RECENT_MAX);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recentPlaylists));
+  if (elEditorPanel) elEditorPanel.recentPlaylists = recentPlaylists;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   File save / load
+───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Download the current playlist as a JSON file and add it to the recent list.
+ */
+function savePlaylist() {
+  const datePart = new Date().toISOString().slice(0, 16).replace('T', '-').replace(':', '');
+  const filename  = `playlist-${datePart}.json`;
+  const json      = JSON.stringify(playlist, null, 2);
+  const blob      = new Blob([json], { type: 'application/json' });
+  const url       = URL.createObjectURL(blob);
+  const a         = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  // Revoke after a short delay so the browser has time to initiate the download.
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+  addToRecentPlaylists(filename, playlist);
+}
+
+/**
+ * Parse and apply a playlist file that was opened via the file picker.
+ * @param {{ name:string, content:string }} detail
+ */
+function onLoadFileFromEditor({ name, content }) {
+  let parsed;
   try {
-    await wakeLockSentinel.release();
-  } catch (_) {
-    // Ignore errors during release.
+    parsed = JSON.parse(content);
+  } catch (e) {
+    setValidation('invalid', `✗ ${e.message}`);
+    return;
   }
-  wakeLockSentinel = null;
-}
-
-function startMetronome() {
-  const song = playlist[currentSongIndex];
-  if (!song) return;
-
-  ensureAudioContext();
-
-  currentBeat  = 0;
-  currentSubdiv = 0;
-  beatDurSeconds = 60 / song.tempo;
-  nextBeatTime   = audioCtx.currentTime + 0.05;
-  playStartAudioTime = nextBeatTime;
-  visualQueue    = [];
-  visualQueueHead = 0;
-
-  schedulerTimer = setInterval(scheduleBeats, SCHEDULE_INTERVAL_MS);
-  animationFrameId = requestAnimationFrame(animationLoop);
-
-  isPlaying = true;
-  isPaused  = false;
-
-  renderBeatDots(song.beats);
-  positionWeightForTempo(song.tempo);
-  acquireWakeLock();
-  updateUI();
-}
-
-function pauseMetronome() {
-  clearInterval(schedulerTimer);
-  schedulerTimer = null;
-  cancelAnimationFrame(animationFrameId);
-  animationFrameId = null;
-
-  // Suspend the AudioContext so it stops consuming CPU while paused.
-  if (audioCtx && audioCtx.state === 'running') {
-    void audioCtx.suspend().catch(() => {
-      // Ignore errors if the AudioContext is already closed or cannot be suspended.
-    });
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    setValidation('invalid', '✗ Must be a non-empty array');
+    return;
   }
-
-  isPaused  = true;
-  isPlaying = false;
-  // A user-initiated pause should not trigger an auto-resume on visibility restore.
-  pausedByVisibility = false;
-  updateUI();
+  if (elMetronome && elMetronome.playbackState !== 'stopped') elMetronome.playbackState = 'stopped';
+  loadPlaylist(parsed);
+  syncEditorFromPlaylist();
+  addToRecentPlaylists(name, playlist);
 }
 
-function resumeMetronome() {
-  const song = playlist[currentSongIndex];
-  if (!song) return;
-
-  ensureAudioContext();
-
-  // Restart from beat 0
-  currentBeat  = 0;
-  currentSubdiv = 0;
-  beatDurSeconds = 60 / song.tempo;
-  nextBeatTime   = audioCtx.currentTime + 0.05;
-  playStartAudioTime = nextBeatTime;
-  visualQueue    = [];
-  visualQueueHead = 0;
-
-  schedulerTimer = setInterval(scheduleBeats, SCHEDULE_INTERVAL_MS);
-  animationFrameId = requestAnimationFrame(animationLoop);
-
-  isPlaying = true;
-  isPaused  = false;
-  acquireWakeLock();
-  updateUI();
-}
-
-function stopMetronome() {
-  clearInterval(schedulerTimer);
-  schedulerTimer = null;
-  cancelAnimationFrame(animationFrameId);
-  animationFrameId = null;
-
-  isPlaying = false;
-  isPaused  = false;
-  pausedByVisibility = false;
-  visualQueue = [];
-  visualQueueHead = 0;
-
-  releaseWakeLock();
-  resetVisuals();
-  updateUI();
+/**
+ * Re-load a playlist from the recent-playlists list by index.
+ * @param {number} index  Index into `recentPlaylists` array
+ */
+function onLoadRecentFromEditor(index) {
+  const entry = recentPlaylists[index];
+  if (!entry?.playlist) return;
+  if (elMetronome && elMetronome.playbackState !== 'stopped') elMetronome.playbackState = 'stopped';
+  loadPlaylist(entry.playlist);
+  syncEditorFromPlaylist();
+  // Move to top of the recent list
+  addToRecentPlaylists(entry.name, playlist);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -501,12 +222,6 @@ function loadPlaylist(songs) {
 
   updateSongDisplay();
   updateUI();
-
-  const song = playlist[0];
-  if (song) {
-    renderBeatDots(song.beats);
-    positionWeightForTempo(song.tempo);
-  }
 }
 
 /**
@@ -515,56 +230,33 @@ function loadPlaylist(songs) {
  */
 function goToSong(index) {
   if (index < 0 || index >= playlist.length) return;
-  const wasPlaying = isPlaying;
-  if (isPlaying || isPaused) stopMetronome();
+  const wasPlaying = elMetronome?.playbackState === 'playing';
+  if (elMetronome && elMetronome.playbackState !== 'stopped') elMetronome.playbackState = 'stopped';
   currentSongIndex = index;
   updateSongDisplay();
   updateUI();
-  const song = playlist[currentSongIndex];
-  if (song) {
-    renderBeatDots(song.beats);
-    positionWeightForTempo(song.tempo);
-  }
-  if (wasPlaying) startMetronome();
+  if (wasPlaying) elMetronome.playbackState = 'playing';
 }
 
 function updateSongDisplay() {
-  const song = playlist[currentSongIndex];
+  const song  = playlist[currentSongIndex];
+  const total = playlist.length;
   if (song) {
-    elSongOrder.textContent = `[${currentSongIndex + 1}/${playlist.length}]`;
-    elSongName.textContent = song.name;
-    const subdivLabel = (song.subdivision || 1) > 1
-      ? ` · ×${song.subdivision} subdivision`
-      : '';
-    elSongMeta.textContent =
-      `${song.tempo} BPM · ${song.beats} beats/bar${subdivLabel}`;
-    elSongPos.textContent = `${currentSongIndex + 1} / ${playlist.length}`;
-
-    // Populate editable fields
-    elEditName.value         = song.name;
-    elEditTempo.value        = song.tempo;
-    elEditBeats.value        = song.beats;
-    elEditSubdivision.value  = song.subdivision || 1;
-    elEditName.disabled        = false;
-    elEditTempo.disabled       = false;
-    elEditBeats.disabled       = false;
-    elEditSubdivision.disabled = false;
+    elSongInfo.order       = `[${currentSongIndex + 1}/${total}]`;
+    elSongInfo.position    = `${currentSongIndex + 1} / ${total}`;
+    elSongInfo.name        = song.name;
+    elSongInfo.tempo       = song.tempo;
+    elSongInfo.beats       = song.beats;
+    elSongInfo.subdivision = song.subdivision || 1;
   } else {
-    elSongOrder.textContent  = '';
-    elSongName.textContent   = 'No playlist loaded';
-    elSongMeta.textContent   = '';
-    elSongPos.textContent    = '';
-
-    // Clear and disable edit inputs so stale values are not shown
-    elEditName.value         = '';
-    elEditTempo.value        = '';
-    elEditBeats.value        = '';
-    elEditSubdivision.value  = '';
-    elEditName.disabled        = true;
-    elEditTempo.disabled       = true;
-    elEditBeats.disabled       = true;
-    elEditSubdivision.disabled = true;
+    elSongInfo.order    = '';
+    elSongInfo.position = '';
+    elSongInfo.name     = '';
   }
+  elSongInfo.hasPrev     = currentSongIndex > 0;
+  elSongInfo.hasNext     = currentSongIndex < total - 1;
+  elSongInfo.canMoveUp   = currentSongIndex > 0;
+  elSongInfo.canMoveDown = currentSongIndex < total - 1;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -572,36 +264,12 @@ function updateSongDisplay() {
 ───────────────────────────────────────────────────────────────────────── */
 
 function updateUI() {
-  const hasPlaylist = playlist.length > 0;
-
-  elPlayBtn.disabled = !hasPlaylist;
-  const playBtnConfig = isPlaying  ? { text: '⏸ Pause',   label: 'Pause'   }
-                      : isPaused   ? { text: '▶ Restart', label: 'Restart' }
-                                   : { text: '▶ Play',    label: 'Play'    };
-  elPlayBtn.textContent = playBtnConfig.text;
-  elPlayBtn.title = playBtnConfig.label;
-  elPlayBtn.setAttribute('aria-label', playBtnConfig.label);
-  elStopBtn.disabled  = !isPlaying && !isPaused;
-
-  elPrevSong.disabled = currentSongIndex <= 0;
-  elNextSong.disabled = currentSongIndex >= playlist.length - 1;
-  elMoveUpBtn.disabled   = currentSongIndex <= 0;
-  elMoveDownBtn.disabled = currentSongIndex >= playlist.length - 1;
-
-  if (soundEnabled) {
-    elSoundBtn.textContent = '🔊';
-    elSoundBtn.classList.add('sound-on');
-    elSoundBtn.classList.remove('sound-off');
-    elSoundBtn.title = 'Sound on — click to mute';
-    elSoundBtn.setAttribute('aria-label', 'Sound on — click to mute');
-    elSoundBtn.setAttribute('aria-pressed', 'true');
-  } else {
-    elSoundBtn.textContent = '🔇';
-    elSoundBtn.classList.add('sound-off');
-    elSoundBtn.classList.remove('sound-on');
-    elSoundBtn.title = 'Sound off — click to unmute';
-    elSoundBtn.setAttribute('aria-label', 'Sound off — click to unmute');
-    elSoundBtn.setAttribute('aria-pressed', 'false');
+  // Push current song settings into the metronome component
+  const song = playlist[currentSongIndex];
+  if (elMetronome && song) {
+    elMetronome.tempo       = song.tempo;
+    elMetronome.beats       = song.beats;
+    elMetronome.subdivision = song.subdivision || 1;
   }
 }
 
@@ -627,12 +295,12 @@ function activateFallbackEditor() {
   usingFallbackEditor = true;
   clearTimeout(monacoLoadTimeout);
 
-  const container = document.getElementById('monaco-editor-container');
-  const fallback  = document.getElementById('fallback-editor');
-  if (container) container.style.display = 'none';
-  if (!fallback) return;
+  // Switch the editor panel component to show the fallback textarea
+  // (avoids Preact re-renders overwriting direct style manipulations)
+  elEditorPanel.useFallback = true;
 
-  fallback.style.display = 'block';
+  const fallback = document.getElementById('fallback-editor');
+  if (!fallback) return;
 
   let initialJson;
   try {
@@ -781,8 +449,8 @@ function refreshValidationStatus() {
 }
 
 function setValidation(state, msg) {
-  elValidationMsg.textContent = msg;
-  elValidationMsg.className   = `validation-msg ${state}`;
+  elEditorPanel.validationMsg   = msg;
+  elEditorPanel.validationState = state;
 }
 
 /** Read the editor, validate, and apply as the active playlist. */
@@ -802,20 +470,13 @@ function applyPlaylist() {
   }
 
   // Stop current playback before switching
-  if (isPlaying || isPaused) stopMetronome();
+  if (elMetronome?.playbackState !== 'stopped') elMetronome.playbackState = 'stopped';
 
   loadPlaylist(parsed);
 
-  // Brief success feedback on the button
-  const prev = elApplyBtn.textContent;
-  elApplyBtn.textContent = '✓ Applied!';
-  elApplyBtn.style.background  = 'var(--success)';
-  elApplyBtn.style.borderColor = 'var(--success)';
-  setTimeout(() => {
-    elApplyBtn.textContent = prev;
-    elApplyBtn.style.background  = '';
-    elApplyBtn.style.borderColor = '';
-  }, 1400);
+  // Brief success feedback on the Apply button
+  elEditorPanel.applyFeedback = true;
+  setTimeout(() => { elEditorPanel.applyFeedback = false; }, 1400);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -842,49 +503,40 @@ function syncEditorFromPlaylist() {
  * it was playing.  Used after in-place song edits to pick up new settings.
  */
 function restartMetronomeIfPlaying() {
-  if (isPlaying || isPaused) {
-    const wasPlaying = isPlaying;
-    stopMetronome();
-    if (wasPlaying) startMetronome();
-  }
+  if (!elMetronome || elMetronome.playbackState === 'stopped') return;
+  const wasPlaying = elMetronome.playbackState === 'playing';
+  elMetronome.playbackState = 'stopped';
+  if (wasPlaying) elMetronome.playbackState = 'playing';
 }
 
 /**
- * Called when any editable song field (name / tempo / beats / subdivision)
- * loses focus.  Validates the new values, updates the playlist in memory,
- * syncs the JSON editor and refreshes the metronome visuals.
+ * Called when the song-info component emits 'song-change' (all fields valid,
+ * user blurred an edit field).
+ * @param {{ name:string, tempo:number, beats:number, subdivision:number }} detail
  */
-function onEditFieldBlur() {
+function onSongChangeFromComponent(detail) {
   if (!playlist[currentSongIndex]) return;
-
-  const name        = elEditName.value.trim();
-  const tempo       = parseFloat(elEditTempo.value);
-  const beats       = parseInt(elEditBeats.value, 10);
-  const subdivision = parseInt(elEditSubdivision.value, 10);
-
-  // Reject invalid values and restore the previous display
-  if (
-    !name ||
-    isNaN(tempo) || tempo < 20 || tempo > 400 ||
-    isNaN(beats) || beats < 1  || beats > 32  ||
-    isNaN(subdivision) || subdivision < 1 || subdivision > 8
-  ) {
-    updateSongDisplay();
-    return;
-  }
-
-  // Update in-memory playlist and persist
+  const { name, tempo, beats, subdivision } = detail;
   playlist[currentSongIndex] = { ...playlist[currentSongIndex], name, tempo, beats, subdivision };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
-
-  // Sync JSON editor and refresh static display
   syncEditorFromPlaylist();
   updateSongDisplay();
+  updateUI();
+  restartMetronomeIfPlaying();
+}
 
-  // Refresh visual metronome
-  renderBeatDots(beats);
-  positionWeightForTempo(tempo);
-
+/**
+ * Called when the song-info component emits 'song-input' (all fields valid,
+ * fired immediately on numeric input events so the metronome responds live).
+ * @param {{ name:string, tempo:number, beats:number, subdivision:number }} detail
+ */
+function onSongInputFromComponent(detail) {
+  if (!playlist[currentSongIndex]) return;
+  const { name, tempo, beats, subdivision } = detail;
+  playlist[currentSongIndex] = { ...playlist[currentSongIndex], name, tempo, beats, subdivision };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
+  syncEditorFromPlaylist();
+  updateUI();
   restartMetronomeIfPlaying();
 }
 
@@ -906,11 +558,6 @@ function moveSong(direction) {
 
   updateSongDisplay();
   updateUI();
-  const song = playlist[currentSongIndex];
-  if (song) {
-    renderBeatDots(song.beats);
-    positionWeightForTempo(song.tempo);
-  }
 }
 
 /**
@@ -929,8 +576,6 @@ function insertSong(offset) {
 
   updateSongDisplay();
   updateUI();
-  renderBeatDots(newSong.beats);
-  positionWeightForTempo(newSong.tempo);
   restartMetronomeIfPlaying();
 }
 
@@ -943,8 +588,8 @@ function insertSong(offset) {
 function deleteSong() {
   if (playlist.length === 0) return;
 
-  const wasPlaying = isPlaying;
-  if (isPlaying || isPaused) stopMetronome();
+  const wasPlaying = elMetronome?.playbackState === 'playing';
+  if (elMetronome && elMetronome.playbackState !== 'stopped') elMetronome.playbackState = 'stopped';
 
   playlist.splice(currentSongIndex, 1);
 
@@ -954,7 +599,6 @@ function deleteSong() {
     syncEditorFromPlaylist();
     updateSongDisplay();
     updateUI();
-    renderBeatDots(0);
     return;
   }
 
@@ -967,52 +611,8 @@ function deleteSong() {
 
   updateSongDisplay();
   updateUI();
-  const song = playlist[currentSongIndex];
-  if (song) {
-    renderBeatDots(song.beats);
-    positionWeightForTempo(song.tempo);
-  }
 
-  if (wasPlaying) startMetronome();
-}
-
-/**
- * Called on `input` events for the numeric edit fields (tempo / beats /
- * subdivision).  Applies the new values immediately when all fields are valid,
- * without restoring the fields on invalid mid-typing states.
- */
-function onEditFieldInput() {
-  if (!playlist[currentSongIndex]) return;
-
-  const name        = elEditName.value.trim();
-  const tempo       = parseFloat(elEditTempo.value);
-  const beats       = parseInt(elEditBeats.value, 10);
-  const subdivision = parseInt(elEditSubdivision.value, 10);
-
-  // Only apply when every field is currently valid; otherwise do nothing
-  // (onEditFieldBlur will restore invalid values when focus leaves the field)
-  if (
-    !name ||
-    isNaN(tempo) || tempo < 20 || tempo > 400 ||
-    isNaN(beats) || beats < 1  || beats > 32  ||
-    isNaN(subdivision) || subdivision < 1 || subdivision > 8
-  ) {
-    return;
-  }
-
-  // Update in-memory playlist and persist
-  playlist[currentSongIndex] = { ...playlist[currentSongIndex], name, tempo, beats, subdivision };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlist));
-
-  // Sync JSON editor (without resetting the edit fields themselves)
-  syncEditorFromPlaylist();
-
-  // Refresh metronome visuals
-  renderBeatDots(beats);
-  positionWeightForTempo(tempo);
-
-  // Restart if currently playing so the new settings take effect immediately
-  restartMetronomeIfPlaying();
+  if (wasPlaying) elMetronome.playbackState = 'playing';
 }
 
 /**
@@ -1057,9 +657,9 @@ function applyPlaylistOnEditorBlur() {
   const normalizedCurrent = playlist.map(s => ({ subdivision: 1, ...s }));
   if (JSON.stringify(normalized) === JSON.stringify(normalizedCurrent)) return;
 
-  const wasPlaying   = isPlaying;
+  const wasPlaying   = elMetronome?.playbackState === 'playing';
   const savedIndex   = currentSongIndex;
-  if (isPlaying || isPaused) stopMetronome();
+  if (elMetronome && elMetronome.playbackState !== 'stopped') elMetronome.playbackState = 'stopped';
 
   playlist          = normalized;
   currentSongIndex  = Math.min(savedIndex, playlist.length - 1);
@@ -1067,12 +667,7 @@ function applyPlaylistOnEditorBlur() {
 
   updateSongDisplay();
   updateUI();
-  const song = playlist[currentSongIndex];
-  if (song) {
-    renderBeatDots(song.beats);
-    positionWeightForTempo(song.tempo);
-  }
-  if (wasPlaying) startMetronome();
+  if (wasPlaying) elMetronome.playbackState = 'playing';
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -1080,22 +675,21 @@ function applyPlaylistOnEditorBlur() {
 ───────────────────────────────────────────────────────────────────────── */
 
 function setEditorVisible(visible) {
+  // Let the component manage aria-hidden and editor-hidden class
+  elEditorPanel.open = visible;
+  // Switch song-info between play and edit mode
+  elSongInfo.mode    = visible ? 'edit' : 'play';
+
+  // Toggle button lives in the main header — update its accessible state
+  elToggleEditorBtn.setAttribute('aria-pressed', String(visible));
   if (visible) {
-    elEditorPanel.classList.remove('editor-hidden');
-    elEditorPanel.setAttribute('aria-hidden', 'false');
-    elToggleEditorBtn.setAttribute('aria-pressed', 'true');
     elToggleEditorBtn.setAttribute('title', 'Toggle Play Mode');
     elToggleEditorBtn.textContent = '✏️ Toggle Play Mode';
     elToggleEditorBtn.setAttribute('aria-label', 'Toggle Play Mode');
-    document.body.classList.add('edit-mode');
   } else {
-    elEditorPanel.classList.add('editor-hidden');
-    elEditorPanel.setAttribute('aria-hidden', 'true');
-    elToggleEditorBtn.setAttribute('aria-pressed', 'false');
     elToggleEditorBtn.setAttribute('title', 'Toggle Edit Mode');
     elToggleEditorBtn.textContent = '▶ Toggle Edit Mode';
     elToggleEditorBtn.setAttribute('aria-label', 'Toggle Edit Mode');
-    document.body.classList.remove('edit-mode');
   }
 
   // On mobile the editor panel is always in the DOM (overflow-scroll layout).
@@ -1119,122 +713,39 @@ function setEditorVisible(visible) {
 ───────────────────────────────────────────────────────────────────────── */
 
 function init() {
-  // Resolve DOM references
-  elPlayBtn   = document.getElementById('play-btn');
-  elStopBtn   = document.getElementById('stop-btn');
-  elSoundBtn  = document.getElementById('sound-btn');
-
-  elPrevSong  = document.getElementById('prev-song-btn');
-  elNextSong  = document.getElementById('next-song-btn');
-  elSongName  = document.getElementById('song-name');
-  elSongMeta  = document.getElementById('song-meta');
-  elSongPos   = document.getElementById('song-position');
-  elSongOrder = document.getElementById('song-order');
-
-  elEditName        = document.getElementById('edit-name');
-  elEditTempo       = document.getElementById('edit-tempo');
-  elEditBeats       = document.getElementById('edit-beats');
-  elEditSubdivision = document.getElementById('edit-subdivision');
-  elMoveUpBtn       = document.getElementById('move-up-btn');
-  elMoveDownBtn     = document.getElementById('move-down-btn');
-  elInsertBeforeBtn = document.getElementById('insert-before-btn');
-  elInsertAfterBtn  = document.getElementById('insert-after-btn');
-  elDeleteSongBtn   = document.getElementById('delete-song-btn');
-
-  elPendulum    = document.getElementById('pendulum');
-  elPendulumBob = document.getElementById('pendulum-bob');
-  elWeightRect  = document.getElementById('weight-rect');
-  elBeatText    = document.getElementById('beat-text');
-
-  elBeatLightsRow  = document.getElementById('beat-lights-row');
-  elValidationMsg  = document.getElementById('validation-msg');
-  elApplyBtn       = document.getElementById('apply-btn');
+  // Resolve custom element references
+  elMetronome   = document.getElementById('metronome-player');
+  elSongInfo    = document.getElementById('song-info');
+  elEditorPanel = document.getElementById('editor-panel');
   elToggleEditorBtn = document.getElementById('toggle-editor-btn');
-  elCloseEditorBtn  = document.getElementById('close-editor-btn');
-  elEditorPanel     = document.getElementById('editor-panel');
 
-  // Transport controls
-  elPlayBtn.addEventListener('click', () => {
-    if (isPlaying) {
-      pauseMetronome();
-    } else if (isPaused) {
-      ensureAudioContext();
-      resumeMetronome();
-    } else {
-      ensureAudioContext();
-      startMetronome();
-    }
-  });
-  elStopBtn.addEventListener('click',  stopMetronome);
+  // Song info events
+  elSongInfo.addEventListener('prev',          () => goToSong(currentSongIndex - 1));
+  elSongInfo.addEventListener('next',          () => goToSong(currentSongIndex + 1));
+  elSongInfo.addEventListener('move-up',       () => moveSong(-1));
+  elSongInfo.addEventListener('move-down',     () => moveSong(1));
+  elSongInfo.addEventListener('insert-before', () => insertSong(0));
+  elSongInfo.addEventListener('insert-after',  () => insertSong(1));
+  elSongInfo.addEventListener('delete',        deleteSong);
+  elSongInfo.addEventListener('song-change',   (e) => onSongChangeFromComponent(e.detail));
+  elSongInfo.addEventListener('song-input',    (e) => onSongInputFromComponent(e.detail));
 
-  elSoundBtn.addEventListener('click', () => {
-    soundEnabled = !soundEnabled;
-    updateUI();
-  });
+  // Editor panel events
+  elEditorPanel.addEventListener('apply',         applyPlaylist);
+  elEditorPanel.addEventListener('close',         () => setEditorVisible(false));
+  elEditorPanel.addEventListener('save-playlist', savePlaylist);
+  elEditorPanel.addEventListener('load-file',     (e) => onLoadFileFromEditor(e.detail));
+  elEditorPanel.addEventListener('load-recent',   (e) => onLoadRecentFromEditor(e.detail));
 
-  // Song navigation
-  elPrevSong.addEventListener('click', () => goToSong(currentSongIndex - 1));
-  elNextSong.addEventListener('click', () => goToSong(currentSongIndex + 1));
+  // Populate recent-playlists from localStorage
+  loadRecentPlaylists();
+  elEditorPanel.recentPlaylists = recentPlaylists;
 
-  // Edit-mode field changes → sync to editor on blur
-  [elEditName, elEditTempo, elEditBeats, elEditSubdivision].forEach(el => {
-    el.addEventListener('blur', onEditFieldBlur);
-  });
+  // Toggle editor button (in the main header — not inside any component)
+  elToggleEditorBtn.addEventListener('click', () => setEditorVisible(!elEditorPanel.open));
 
-  // Number fields also respond immediately on input (e.g. spinner up/down)
-  [elEditTempo, elEditBeats, elEditSubdivision].forEach(el => {
-    el.addEventListener('input', onEditFieldInput);
-  });
-
-  // Move up / down buttons
-  elMoveUpBtn.addEventListener('click',   () => moveSong(-1));
-  elMoveDownBtn.addEventListener('click', () => moveSong(1));
-
-  // Insert before / after buttons
-  elInsertBeforeBtn.addEventListener('click', () => insertSong(0));
-  elInsertAfterBtn.addEventListener('click',  () => insertSong(1));
-
-  // Delete current song button
-  elDeleteSongBtn.addEventListener('click', deleteSong);
-
-  // Editor panel toggle
-  elToggleEditorBtn.addEventListener('click', () => {
-    const hidden = elEditorPanel.classList.contains('editor-hidden');
-    setEditorVisible(hidden); // show if currently hidden, hide if visible
-  });
-  elCloseEditorBtn.addEventListener('click', () => setEditorVisible(false));
-
-  // Apply button
-  elApplyBtn.addEventListener('click', applyPlaylist);
-
-  // Page Visibility API: auto-pause when the tab is hidden, auto-resume when
-  // it becomes visible again (only if we were the ones who paused it).
-  // Also re-acquire the wake lock on visibility restore, because the browser
-  // automatically releases wake locks when the page is hidden.
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      if (isPlaying) {
-        pauseMetronome();
-        // Mark as auto-paused *after* pauseMetronome() so the flag is not
-        // cleared by the "user-initiated pause" reset inside that function.
-        pausedByVisibility = true;
-      }
-    } else if (document.visibilityState === 'visible') {
-      // Tab is visible again
-      if (pausedByVisibility && isPaused) {
-        pausedByVisibility = false;
-        resumeMetronome();
-      }
-      if (isPlaying || isPaused) {
-        acquireWakeLock();
-      }
-    }
-  });
-
-  // Set initial UI state
-  // Set initial edit-mode state (editor starts visible by default)
-  const editorStartsVisible = !elEditorPanel.classList.contains('editor-hidden');
-  setEditorVisible(editorStartsVisible);
+  // Start with the editor closed
+  setEditorVisible(false);
 
   updateUI();
 
