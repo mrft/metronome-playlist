@@ -315,8 +315,9 @@ metronome-player {
 
 #pendulum-svg {
   width: 200px;
-  height: 305px;
+  height: 240px;
   filter: drop-shadow(0 4px 18px rgba(74, 158, 255, 0.15));
+  /* border: #4cfa80 2px solid; */
 }
 
 /* ===== Beat lights ===== */

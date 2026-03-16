@@ -413,9 +413,9 @@ function MetronomePlayer({ tempo, beats, subdivision, onApiReady }) {
 
   return html`
     <section id="metronome-visual">
-      <svg id="pendulum-svg" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg"
+      <svg id="pendulum-svg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg"
            role="img" aria-label="Pendulum metronome">
-        <g transform="translate(0,-50)">
+        <g transform="translate(0,-60)">
           <!-- Metronome body (pyramid / trapezoid) -->
           <polygon points="58,295 142,295 124,148 76,148" fill="#1a1a38"/>
           <polygon points="60,293 140,293 122,150 78,150" fill="#22224a"/>
