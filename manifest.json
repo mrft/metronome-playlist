@@ -21,18 +21,6 @@
       "purpose": "any"
     }
   ],
-  "screenshots": [
-    {
-      "src": "/icons/screenshot-540x720.png",
-      "sizes": "540x720",
-      "type": "image/png"
-    },
-    {
-      "src": "/icons/screenshot-1280x720.png",
-      "sizes": "1280x720",
-      "type": "image/png"
-    }
-  ],
   "categories": ["music", "productivity"],
   "shortcuts": [
     {
@@ -42,8 +30,9 @@
       "url": "/?mode=play",
       "icons": [
         {
-          "src": "/icons/icon-192x192.png",
-          "sizes": "192x192"
+          "src": "/icons/icon-192x192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
         }
       ]
     },
@@ -54,8 +43,9 @@
       "url": "/?mode=edit",
       "icons": [
         {
-          "src": "/icons/icon-192x192.png",
-          "sizes": "192x192"
+          "src": "/icons/icon-192x192.svg",
+          "sizes": "192x192",
+          "type": "image/svg+xml"
         }
       ]
     }

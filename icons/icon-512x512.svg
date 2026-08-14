@@ -1,45 +1,38 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <!-- Background -->
-  <rect width="512" height="512" fill="#2c3e50"/>
-  
-  <!-- Metronome body -->
-  <g transform="translate(256, 256)">
-    <!-- Base/stand -->
-    <rect x="-90" y="145" width="180" height="20" rx="4" fill="#34495e"/>
-    <rect x="-50" y="160" width="100" height="10" fill="#7f8c8d"/>
-    
-    <!-- Main body (trapezoid-like shape) -->
-    <path d="M -80 120 L 80 120 L 65 40 L -65 40 Z" fill="#34495e" stroke="#2c3e50" stroke-width="2"/>
-    
-    <!-- Decorative panel -->
-    <rect x="-70" y="50" width="140" height="60" rx="4" fill="#2c3e50" stroke="#1a252f" stroke-width="2"/>
-    
-    <!-- Clock face background -->
-    <circle cx="0" cy="0" r="55" fill="#ecf0f1" stroke="#2c3e50" stroke-width="4"/>
-    
-    <!-- Clock markers -->
-    <g stroke="#2c3e50" stroke-width="3" stroke-linecap="round">
-      <line x1="0" y1="-52" x2="0" y2="-42"/>
-      <line x1="36.8" y1="-38.8" x2="30.6" y2="-30.6"/>
-      <line x1="52" y1="0" x2="42" y2="0"/>
-      <line x1="36.8" y1="38.8" x2="30.6" y2="30.6"/>
-      <line x1="0" y1="52" x2="0" y2="42"/>
-      <line x1="-36.8" y1="38.8" x2="-30.6" y2="30.6"/>
-      <line x1="-52" y1="0" x2="-42" y2="0"/>
-      <line x1="-36.8" y1="-38.8" x2="-30.6" y2="-30.6"/>
+  <rect width="512" height="512" rx="64" fill="#2c3e50"/>
+
+  <!-- Metronome body scaled to fit 512x512 canvas (original viewBox 200x240 → scale ~1.95, centered) -->
+  <g transform="translate(256,266) scale(1.95)">
+    <g transform="translate(-100,-120)">
+      <g transform="translate(0,-60)">
+        <!-- Metronome body (pyramid / trapezoid) -->
+        <polygon points="58,295 142,295 124,148 76,148" fill="#1a1a38"/>
+        <polygon points="60,293 140,293 122,150 78,150" fill="#22224a"/>
+
+        <!-- Scale lines on the body -->
+        <line x1="88" y1="173" x2="112" y2="173" stroke="#35356a" stroke-width="1.6"/>
+        <line x1="90" y1="188" x2="110" y2="188" stroke="#35356a" stroke-width="1.6"/>
+        <line x1="90" y1="203" x2="110" y2="203" stroke="#35356a" stroke-width="1.6"/>
+        <line x1="90" y1="218" x2="110" y2="218" stroke="#35356a" stroke-width="1.6"/>
+        <line x1="88" y1="233" x2="112" y2="233" stroke="#35356a" stroke-width="1.6"/>
+
+        <!-- Body outline -->
+        <polygon points="58,295 142,295 124,148 76,148" fill="none" stroke="#3a3a72" stroke-width="2"/>
+
+        <!-- Pendulum rod (tilted ~15° like a swinging beat) -->
+        <g transform="rotate(-15,100,197)">
+          <line x1="100" y1="60" x2="100" y2="287" stroke="#c0c0de" stroke-width="3" stroke-linecap="round"/>
+          <!-- Tempo weight -->
+          <rect x="93" y="132" width="14" height="11" rx="3" fill="#6060c0"/>
+          <!-- Bob -->
+          <circle cx="100" cy="283" r="11" fill="#4a9eff"/>
+        </g>
+
+        <!-- Pivot pin (on top of rod) -->
+        <circle cx="100" cy="197" r="5"   fill="#666"/>
+        <circle cx="100" cy="197" r="2.5" fill="#ccc"/>
+      </g>
     </g>
-    
-    <!-- Pendulum (swinging rod) - animated appearance with slight tilt -->
-    <line x1="0" y1="0" x2="0" y2="70" stroke="#FF6B6B" stroke-width="8" stroke-linecap="round" transform="rotate(-20)"/>
-    
-    <!-- Pendulum weight (bob) -->
-    <circle cx="12" cy="68" r="14" fill="#FF6B6B"/>
-    
-    <!-- Center pivot point -->
-    <circle cx="0" cy="0" r="7" fill="#2c3e50"/>
-    
-    <!-- Tempo markings (decorative) -->
-    <text x="-45" y="15" font-size="16" font-weight="bold" fill="#2c3e50" text-anchor="middle">60</text>
-    <text x="45" y="15" font-size="16" font-weight="bold" fill="#2c3e50" text-anchor="middle">120</text>
   </g>
 </svg>
