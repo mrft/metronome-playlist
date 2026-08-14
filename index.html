@@ -71,6 +71,8 @@
           console.info(`[SW] New version available: ${event.data.version} — ${event.data.changeLog}`);
         }
       });
+    } else {
+      console.warn("No Service Worker support");
     }
   </script>
 </body>
