@@ -50,9 +50,10 @@ async function fetchVersionWithTimeout() {
 /**
  * Open a new versioned cache, copy all entries from the old cache into it,
  * then delete the old cache.
+ * @param {string} newCacheName - Target cache name.
+ * @param {string|null} oldName - Current cache name (avoids redundant lookup).
  */
-async function migrateCacheTo(newCacheName) {
-  const oldName = await currentCacheName();
+async function migrateCacheTo(newCacheName, oldName) {
   const newCache = await caches.open(newCacheName);
 
   if (oldName && oldName !== newCacheName) {
@@ -89,7 +90,7 @@ self.addEventListener('activate', event => {
         const desired = CACHE_PREFIX + versionData.version;
         const current = await currentCacheName();
         if (current !== desired) {
-          await migrateCacheTo(desired);
+          await migrateCacheTo(desired, current);
         }
       }
     })()
@@ -115,7 +116,7 @@ self.addEventListener('fetch', event => {
         // Serve from cache, then re-fetch in the background to stay fresh.
         event.waitUntil(
           fetch(event.request)
-            .then(res => { if (res && res.ok) cache.put(event.request, res); })
+            .then(res => { if (res && res.ok) cache.put(event.request, res.clone()); })
             .catch(() => {/* offline — ignore */})
         );
         return cached;
@@ -155,7 +156,7 @@ self.addEventListener('message', event => {
       const current = await currentCacheName();
       if (current === desired) return;
 
-      await migrateCacheTo(desired);
+      await migrateCacheTo(desired, current);
 
       // Notify all open clients that a new version is available.
       const allClients = await clients.matchAll({ includeUncontrolled: true });
