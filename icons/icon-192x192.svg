@@ -1,37 +1,34 @@
 <svg width="192" height="192" viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background -->
+  <!-- White background -->
   <rect width="192" height="192" rx="24" fill="#ffffff"/>
 
-  <!-- Metronome body scaled to fit 192x192 canvas (original viewBox 200x240 → scale ~0.73, centered) -->
-  <g transform="translate(96,100) scale(0.73)">
+  <!-- Line-art metronome: original internal coords, scaled/centered to fit -->
+  <g transform="translate(96,100) scale(0.73)" stroke="#22224a" fill="none" stroke-linecap="round" stroke-linejoin="round">
     <g transform="translate(-100,-120)">
       <g transform="translate(0,-60)">
-        <!-- Metronome body (pyramid / trapezoid) -->
-        <polygon points="58,295 142,295 124,148 76,148" fill="#1a1a38"/>
-        <polygon points="60,293 140,293 122,150 78,150" fill="#22224a"/>
 
-        <!-- Scale lines on the body -->
-        <line x1="88" y1="173" x2="112" y2="173" stroke="#8888cc" stroke-width="1.6"/>
-        <line x1="90" y1="188" x2="110" y2="188" stroke="#8888cc" stroke-width="1.6"/>
-        <line x1="90" y1="203" x2="110" y2="203" stroke="#8888cc" stroke-width="1.6"/>
-        <line x1="90" y1="218" x2="110" y2="218" stroke="#8888cc" stroke-width="1.6"/>
-        <line x1="88" y1="233" x2="112" y2="233" stroke="#8888cc" stroke-width="1.6"/>
-
-        <!-- Body outline -->
-        <polygon points="58,295 142,295 124,148 76,148" fill="none" stroke="#4a4a8a" stroke-width="2"/>
-
-        <!-- Pendulum rod (tilted ~15° like a swinging beat) -->
+        <!-- Pendulum rod (drawn first, visible through body outline) — tilted 15° -->
         <g transform="rotate(-15,100,197)">
-          <line x1="100" y1="60" x2="100" y2="287" stroke="#4a4a8a" stroke-width="3" stroke-linecap="round"/>
-          <!-- Tempo weight -->
-          <rect x="93" y="132" width="14" height="11" rx="3" fill="#6060c0"/>
-          <!-- Bob -->
-          <circle cx="100" cy="283" r="11" fill="#4a9eff"/>
+          <line x1="100" y1="88" x2="100" y2="287" stroke-width="3"/>
+          <!-- Tempo weight (outline only) -->
+          <rect x="93" y="132" width="14" height="11" rx="3" stroke-width="2.5"/>
+          <!-- Bob (outline only) -->
+          <circle cx="100" cy="283" r="11" stroke-width="2.5"/>
         </g>
 
-        <!-- Pivot pin (on top of rod) -->
-        <circle cx="100" cy="197" r="5"   fill="#aaa"/>
-        <circle cx="100" cy="197" r="2.5" fill="#fff"/>
+        <!-- Metronome body outline (no fill — rod shows through) -->
+        <polygon points="58,295 142,295 124,148 76,148" stroke-width="3"/>
+
+        <!-- Scale lines on the body -->
+        <line x1="88" y1="173" x2="112" y2="173" stroke-width="1.8"/>
+        <line x1="90" y1="188" x2="110" y2="188" stroke-width="1.8"/>
+        <line x1="90" y1="203" x2="110" y2="203" stroke-width="1.8"/>
+        <line x1="90" y1="218" x2="110" y2="218" stroke-width="1.8"/>
+        <line x1="88" y1="233" x2="112" y2="233" stroke-width="1.8"/>
+
+        <!-- Pivot pin -->
+        <circle cx="100" cy="197" r="4" stroke-width="2"/>
+
       </g>
     </g>
   </g>
