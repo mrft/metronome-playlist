@@ -1,6 +1,6 @@
 <svg width="192" height="192" viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
   <!-- Background -->
-  <rect width="192" height="192" rx="24" fill="#2c3e50"/>
+  <rect width="192" height="192" rx="24" fill="#ffffff"/>
 
   <!-- Metronome body scaled to fit 192x192 canvas (original viewBox 200x240 → scale ~0.73, centered) -->
   <g transform="translate(96,100) scale(0.73)">
@@ -11,18 +11,18 @@
         <polygon points="60,293 140,293 122,150 78,150" fill="#22224a"/>
 
         <!-- Scale lines on the body -->
-        <line x1="88" y1="173" x2="112" y2="173" stroke="#35356a" stroke-width="1.6"/>
-        <line x1="90" y1="188" x2="110" y2="188" stroke="#35356a" stroke-width="1.6"/>
-        <line x1="90" y1="203" x2="110" y2="203" stroke="#35356a" stroke-width="1.6"/>
-        <line x1="90" y1="218" x2="110" y2="218" stroke="#35356a" stroke-width="1.6"/>
-        <line x1="88" y1="233" x2="112" y2="233" stroke="#35356a" stroke-width="1.6"/>
+        <line x1="88" y1="173" x2="112" y2="173" stroke="#8888cc" stroke-width="1.6"/>
+        <line x1="90" y1="188" x2="110" y2="188" stroke="#8888cc" stroke-width="1.6"/>
+        <line x1="90" y1="203" x2="110" y2="203" stroke="#8888cc" stroke-width="1.6"/>
+        <line x1="90" y1="218" x2="110" y2="218" stroke="#8888cc" stroke-width="1.6"/>
+        <line x1="88" y1="233" x2="112" y2="233" stroke="#8888cc" stroke-width="1.6"/>
 
         <!-- Body outline -->
-        <polygon points="58,295 142,295 124,148 76,148" fill="none" stroke="#3a3a72" stroke-width="2"/>
+        <polygon points="58,295 142,295 124,148 76,148" fill="none" stroke="#4a4a8a" stroke-width="2"/>
 
         <!-- Pendulum rod (tilted ~15° like a swinging beat) -->
         <g transform="rotate(-15,100,197)">
-          <line x1="100" y1="60" x2="100" y2="287" stroke="#c0c0de" stroke-width="3" stroke-linecap="round"/>
+          <line x1="100" y1="60" x2="100" y2="287" stroke="#4a4a8a" stroke-width="3" stroke-linecap="round"/>
           <!-- Tempo weight -->
           <rect x="93" y="132" width="14" height="11" rx="3" fill="#6060c0"/>
           <!-- Bob -->
@@ -30,8 +30,8 @@
         </g>
 
         <!-- Pivot pin (on top of rod) -->
-        <circle cx="100" cy="197" r="5"   fill="#666"/>
-        <circle cx="100" cy="197" r="2.5" fill="#ccc"/>
+        <circle cx="100" cy="197" r="5"   fill="#aaa"/>
+        <circle cx="100" cy="197" r="2.5" fill="#fff"/>
       </g>
     </g>
   </g>
