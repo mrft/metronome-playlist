@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Metronome Playlist</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="/icons/icon-192x192.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.svg" />
   <link rel="stylesheet" href="style.css" />
   <!-- ES module import map: Preact + HTM loaded from CDN, no build step needed -->
   <script type="importmap">
@@ -47,5 +50,30 @@
   <!-- Monaco Editor loader from CDN -->
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        // Ask the service worker to check for a new version whenever the page
+        // becomes visible again (e.g. user switches back to the tab).
+        const checkVersion = () => {
+          if (reg.active) reg.active.postMessage({ type: 'CHECK_VERSION' });
+        };
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') checkVersion();
+        });
+        // Also check once shortly after the initial load.
+        setTimeout(checkVersion, 5000);
+      });
+
+      // Show a simple notification when a new version has been cached.
+      navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data?.type === 'NEW_VERSION') {
+          console.info(`[SW] New version available: ${event.data.version} — ${event.data.changeLog}`);
+        }
+      });
+    } else {
+      console.warn("No Service Worker support");
+    }
+  </script>
 </body>
 </html>
