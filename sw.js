@@ -113,6 +113,7 @@ self.addEventListener('fetch', event => {
       const cached    = await cache.match(event.request);
 
       if (cached) {
+        console.log("[Metronome Playlist Service Worker]", `fetch: serving ${event.request.url} from cache`);
         // Serve from cache, then re-fetch in the background to stay fresh.
         event.waitUntil(
           fetch(event.request)
@@ -124,6 +125,7 @@ self.addEventListener('fetch', event => {
 
       // Not in cache yet — fetch from network, cache, and return.
       try {
+        console.log("[Metronome Playlist Service Worker]", `fetch: serving ${event.request.url} from fetch`);
         const res = await fetch(event.request);
         if (res && res.ok) {
           cache.put(event.request, res.clone());
